@@ -99,10 +99,59 @@ output/
 
 ---
 
+## Zero-Config Design
+
+The tool must work out of the box with nothing more than an input directory:
+
+```bash
+lpacleaner run "/path/to/book/photos"
+```
+
+This single command must:
+
+1. **Auto-detect output directory**: default to `{input_dir}/../{input_dir_name}_output/`
+   (sibling of the input directory). Override with `-o`.
+2. **Auto-run analyze if no `book.toml` exists**: if the output directory does not
+   contain a `book.toml`, run the analyze step automatically before processing.
+   This ensures ink color, layout, and condition are correctly detected for every
+   book without manual intervention.
+3. **Graceful dependency degradation**:
+   - OCR: if `tesseract` is not installed, skip Stage 11 with a warning
+     ("Tesseract not found, skipping OCR. Install with: dnf install tesseract").
+     The PDF is produced without a text layer (img2pdf fallback).
+   - GPU: if OpenCL is unavailable, fall back to CPU silently (already designed).
+   - Kraken: if not installed and `--ocr-engine kraken` is requested, error with
+     install instructions. Never auto-selected.
+   - OpenVINO: if not installed and `--ai-dewarp` is requested, error with
+     install instructions. Never auto-selected.
+4. **Sane built-in defaults**: the profile is `full`, all optional stages are on,
+   all auto-conditional stages self-skip when not needed. The pipeline produces
+   the best possible output with zero user input.
+5. **`analyze` remains available as a separate command** for users who want to
+   review/edit `book.toml` before processing, or re-run analysis with different
+   sample sizes. But it is never *required*.
+
+### Fallback chain for ink detection (when analyze hasn't run)
+
+If the pipeline runs without `book.toml` AND auto-analyze somehow fails to
+detect ink color:
+
+1. Try HSV histogram peak detection (default analyze algorithm)
+2. Try channel-difference method (R-G, R-B for red; B-R, B-G for blue; etc.)
+3. Last resort: skip color-dependent features (dewarp uses AI or pass-through,
+   deskew uses projection profile instead of staff lines, content area uses
+   fixed inset instead of border detection)
+
+The pipeline never crashes due to missing configuration. It degrades gracefully
+and flags affected pages for review.
+
+---
+
 ## Analyze Command (`analyze.py`)
 
-A prerequisite step that scans sample images and generates a `book.toml`
-config file with auto-detected book characteristics.
+Scans sample images and generates a `book.toml` config file with auto-detected
+book characteristics. Runs automatically as part of `lpacleaner run` if no
+`book.toml` exists, but can also be run separately for manual review/editing.
 
 ### Usage
 
@@ -1076,7 +1125,7 @@ binarize = false                 # only if explicitly requested
 @dataclass
 class Config:
     input_dir: Path
-    output_dir: Path
+    output_dir: Path = None       # default: {input_dir}_output/ (computed at init)
     profile: str = "full"
     preview: int = 0
     use_gpu: bool = True
@@ -1116,8 +1165,8 @@ Loading priority: **CLI args > book.toml > profile defaults > built-in defaults*
 ## CLI Interface (`cli.py`)
 
 ```
-lpacleaner analyze INPUT_DIR [-o OUTPUT_DIR] [--samples 15]
-lpacleaner run INPUT_DIR [OUTPUT_DIR] [--config book.toml]
+lpacleaner run INPUT_DIR                           # just works
+lpacleaner run INPUT_DIR -o OUTPUT_DIR             # explicit output dir
 lpacleaner run INPUT_DIR --profile geometry        # flatten only
 lpacleaner run INPUT_DIR --profile clean           # no OCR
 lpacleaner run INPUT_DIR --profile quick           # fast preview
@@ -1126,6 +1175,7 @@ lpacleaner run INPUT_DIR --stages 2,3,4,5          # explicit stage list (advanc
 lpacleaner run INPUT_DIR --preview 5               # process only 5 images
 lpacleaner run INPUT_DIR --ai-dewarp
 lpacleaner run INPUT_DIR --binarize
+lpacleaner analyze INPUT_DIR [-o OUTPUT_DIR] [--samples 15]
 lpacleaner inspect IMAGE_PATH [--config book.toml]
 lpacleaner review OUTPUT_DIR [--stage 09_enhanced]
 ```
@@ -1133,22 +1183,22 @@ lpacleaner review OUTPUT_DIR [--stage 09_enhanced]
 ### Workflow for a new book
 
 ```bash
-# 1. Auto-detect book characteristics
-lpacleaner analyze "/path/to/book/photos" -o "/path/to/book/output"
+# Simplest usage -- everything automatic:
+lpacleaner run "/path/to/book/photos"
+# Auto-detects book characteristics, processes all pages, produces PDF.
+# Output goes to /path/to/book/photos_output/
 
-# 2. Review and optionally edit the generated config
-cat /path/to/book/output/book.toml
-# Edit book.toml to change profile, skip stages, tune parameters
+# Advanced workflow -- review config before processing:
+lpacleaner analyze "/path/to/book/photos"
+# Review and edit the generated book.toml
+nano "/path/to/book/photos_output/book.toml"
+lpacleaner run "/path/to/book/photos"
 
-# 3. Quick preview to verify geometry (5 sample pages)
-lpacleaner run "/path/to/book/photos" -o "/path/to/book/output" \
-    --profile quick --preview 5
+# Quick preview to check framing before full run:
+lpacleaner run "/path/to/book/photos" --profile quick --preview 5
 
-# 4. Full processing
-lpacleaner run "/path/to/book/photos" -o "/path/to/book/output"
-
-# 5. Review flagged pages
-lpacleaner review "/path/to/book/output"
+# Review flagged pages after processing:
+lpacleaner review "/path/to/book/photos_output"
 ```
 
 ---
