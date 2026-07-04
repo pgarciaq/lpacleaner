@@ -1,9 +1,14 @@
 """Stage 2: Orientation normalization.
 
-Uses content-based detection (horizontal staff line counting) to orient
-each image so that staff lines run left-to-right. Falls back to portrait
-enforcement (h > w) for non-music pages. EXIF is intentionally not
-relied upon -- it is unreliable in practice for old scanned collections.
+Two-phase content-based orientation:
+1. **Axis detection**: horizontal line counting determines whether to
+   rotate 0° or 90° so staff lines run left-to-right.
+2. **Polarity detection**: the vertical centroid of non-staff-line red ink
+   (title text, initials) determines right-side-up vs upside-down.
+   In chant books red titles appear at the top of the page.
+
+Falls back to portrait enforcement for non-music pages (covers, blanks).
+EXIF is intentionally not relied upon.
 
 Also computes a Laplacian focus QA score per image.
 Mandatory stage -- never skipped.
@@ -41,10 +46,7 @@ class OrientationStage(BaseStage):
     ) -> tuple[np.ndarray, dict]:
         meta: dict = {"stage": "orientation"}
 
-        # Content-based orientation: try the current image and a 90° CCW
-        # rotation, pick the one with more horizontal line segments
-        # (staff lines should be horizontal in the correct orientation).
-        img, rotation, method = _orient_by_content(img)
+        img, rotation, method = _orient_by_content(img, cfg)
 
         meta["rotation_applied"] = rotation
         meta["orientation_method"] = method
@@ -61,17 +63,21 @@ class OrientationStage(BaseStage):
         return img, meta
 
 
-def _orient_by_content(img: np.ndarray) -> tuple[np.ndarray, int, str]:
-    """Orient image so that staff lines are horizontal.
+def _orient_by_content(
+    img: np.ndarray,
+    cfg: Config,
+) -> tuple[np.ndarray, int, str]:
+    """Orient image so staff lines are horizontal and right-side-up.
 
-    Tries the image as-is and rotated 90° CCW. Picks whichever has more
-    horizontal line segments. If neither exceeds the minimum threshold,
-    falls back to portrait enforcement (taller than wider).
+    Phase 1 -- axis: count horizontal line segments at 0° and 90° CCW,
+    pick whichever has more (with a 2:1 confidence ratio).
 
-    Returns (oriented_image, degrees_applied, method_name).
+    Phase 2 -- polarity: after making staff lines horizontal, detect
+    non-staff-line red ink (titles, initials). If its vertical centroid
+    is in the lower half, the image is upside-down → rotate 180°.
+
+    Returns (oriented_image, total_degrees_applied, method_name).
     """
-    # Downscale for speed -- line detection doesn't need full resolution
-    scale = 1.0
     h, w = img.shape[:2]
     max_dim = max(h, w)
     if max_dim > 1200:
@@ -81,36 +87,96 @@ def _orient_by_content(img: np.ndarray) -> tuple[np.ndarray, int, str]:
         small = img
 
     h_lines_0 = count_horizontal_lines(small)
-
-    rotated_small = cv2.rotate(small, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    h_lines_90 = count_horizontal_lines(rotated_small)
+    h_lines_90 = count_horizontal_lines(
+        cv2.rotate(small, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    )
 
     logger.debug(
-        "Orientation check: h_lines(0°)=%d, h_lines(90°)=%d",
+        "Orientation axis: h_lines(0°)=%d, h_lines(90°)=%d",
         h_lines_0, h_lines_90,
     )
 
-    # If one orientation has clearly more horizontal lines, use it.
-    # Require a 2:1 ratio to be confident -- a weak ratio means the
-    # background (desk, table) is contributing lines and the signal is
-    # ambiguous.
     max_lines = max(h_lines_0, h_lines_90)
     min_lines = max(min(h_lines_0, h_lines_90), 1)
     ratio = max_lines / min_lines
 
     if max_lines >= _HORIZONTAL_LINE_MIN_COUNT and ratio >= 2.0:
         if h_lines_90 > h_lines_0:
-            return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE), 90, "staff_lines"
+            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            base_rotation = 90
         else:
-            return img, 0, "staff_lines"
+            base_rotation = 0
 
-    # Fallback: neither orientation has enough staff lines (cover, text
-    # page, blank). Enforce portrait (taller than wider).
+        # Phase 2: check if upside-down using red title position
+        flipped, did_flip = _correct_polarity(img, cfg)
+        total = (base_rotation + (180 if did_flip else 0)) % 360
+        method = "staff_lines" + ("+title_flip" if did_flip else "")
+        return flipped, total, method
+
+    # Fallback: no confident staff line signal (cover, blank, text page).
     if w > h:
         logger.info("No staff lines detected; falling back to portrait enforcement")
-        return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE), 90, "portrait_fallback"
+        img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        base_rotation = 90
+    else:
+        base_rotation = 0
 
-    return img, 0, "portrait_fallback"
+    # Still try polarity on the fallback orientation
+    flipped, did_flip = _correct_polarity(img, cfg)
+    total = (base_rotation + (180 if did_flip else 0)) % 360
+    method = "portrait_fallback" + ("+title_flip" if did_flip else "")
+    return flipped, total, method
+
+
+def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
+    """Check if the image is upside-down using the red title position.
+
+    Chant book pages have red title text at the top. After removing
+    horizontal staff lines from the red ink mask, the remaining red
+    (titles, initials, rubrication) should have its vertical centroid
+    in the upper half. If it's in the lower half, rotate 180°.
+
+    Returns (image, did_flip).
+    """
+    oh, ow = img.shape[:2]
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    hue = hsv[:, :, 0].astype(np.int16)
+    sat = hsv[:, :, 1]
+
+    ink_hue = cfg.staff_color_hue
+    ink_range = cfg.staff_color_range
+    hue_diff = np.minimum(
+        np.abs(hue - ink_hue),
+        180 - np.abs(hue - ink_hue),
+    )
+    red_mask = ((hue_diff < ink_range) & (sat > 120)).astype(np.uint8) * 255
+
+    # Remove horizontal staff line structures so only titles/initials remain
+    horiz_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (max(ow // 20, 30), 1)
+    )
+    staff_only = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, horiz_kernel)
+    non_staff_red = cv2.subtract(red_mask, staff_only)
+
+    total_red = np.count_nonzero(non_staff_red)
+    if total_red < 100:
+        logger.debug("Polarity: insufficient non-staff red pixels (%d)", total_red)
+        return img, False
+
+    centroid_y = float(np.mean(np.where(non_staff_red > 0)[0])) / oh
+
+    logger.debug(
+        "Polarity: centroid_y=%.3f, non_staff_red=%d", centroid_y, total_red,
+    )
+
+    if centroid_y > 0.5:
+        logger.info(
+            "Red title centroid in lower half (%.3f) → rotating 180°", centroid_y
+        )
+        return cv2.rotate(img, cv2.ROTATE_180), True
+
+    return img, False
 
 
 def _compute_focus_score(img: np.ndarray) -> float:

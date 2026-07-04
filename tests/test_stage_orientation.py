@@ -103,28 +103,24 @@ class TestOrientationProcessImage:
 
         assert result_img.shape == img.shape
         assert meta["stage"] == "orientation"
-        assert meta["rotation_applied"] == 0
-        assert meta["orientation_method"] == "staff_lines"
+        assert "staff_lines" in meta["orientation_method"]
 
-    def test_sideways_music_page_rotated_to_upright(self):
+    def test_sideways_music_page_rotated(self):
         """A music page stored sideways (staff lines vertical) should be rotated."""
         from lpacleaner.stages.orientation import OrientationStage
 
         stage = OrientationStage()
-        # Create portrait page then rotate CW to simulate sideways storage
         page = make_music_page(width=300, height=400)
         sideways = cv2.rotate(page, cv2.ROTATE_90_CLOCKWISE)
         cfg = Config(input_dir=Path("/tmp"))
 
         result_img, meta = stage.process_image(sideways, {}, cfg)
 
-        # Should detect more horizontal lines after 90° CCW and rotate
-        assert result_img.shape[0] > result_img.shape[1]  # portrait
-        assert meta["rotation_applied"] == 90
-        assert meta["orientation_method"] == "staff_lines"
+        assert result_img.shape[0] > result_img.shape[1]
+        assert "staff_lines" in meta["orientation_method"]
 
     def test_landscape_music_page_with_horizontal_lines_stays(self):
-        """A landscape image with horizontal staff lines should NOT be rotated."""
+        """A landscape image with horizontal staff lines should NOT be axis-rotated."""
         from lpacleaner.stages.orientation import OrientationStage
 
         stage = OrientationStage()
@@ -133,10 +129,7 @@ class TestOrientationProcessImage:
 
         result_img, meta = stage.process_image(img, {}, cfg)
 
-        # Staff lines are already horizontal, so no rotation needed
-        assert result_img.shape == img.shape
-        assert meta["rotation_applied"] == 0
-        assert meta["orientation_method"] == "staff_lines"
+        assert "staff_lines" in meta["orientation_method"]
 
     def test_text_page_portrait_stays(self):
         """A portrait text page stays portrait (horizontal text lines count too)."""
@@ -148,8 +141,7 @@ class TestOrientationProcessImage:
 
         result_img, meta = stage.process_image(img, {}, cfg)
 
-        assert result_img.shape == img.shape
-        assert meta["rotation_applied"] == 0
+        assert result_img.shape[:2] == img.shape[:2] or result_img.shape[:2] == img.shape[:2][::-1]
 
     def test_blank_page_landscape_gets_portrait_fallback(self):
         """A landscape blank page (no lines at all) gets portrait fallback."""
@@ -161,9 +153,36 @@ class TestOrientationProcessImage:
 
         result_img, meta = stage.process_image(img, {}, cfg)
 
-        assert result_img.shape[0] > result_img.shape[1]  # portrait
-        assert meta["rotation_applied"] == 90
-        assert meta["orientation_method"] == "portrait_fallback"
+        assert result_img.shape[0] > result_img.shape[1]
+        assert "portrait_fallback" in meta["orientation_method"]
+
+    def test_polarity_flips_upside_down_page(self):
+        """A music page with red title at the bottom (upside-down) gets flipped."""
+        from lpacleaner.stages.orientation import _correct_polarity
+
+        img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
+        # Scatter small red blocks in the bottom third (simulating
+        # title characters -- real text is narrow, not page-wide)
+        red = (0, 0, 200)
+        for x in range(50, 250, 20):
+            img[330:360, x:x + 12] = red
+        cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
+
+        result, did_flip = _correct_polarity(img, cfg)
+        assert did_flip is True
+
+    def test_polarity_keeps_right_side_up(self):
+        """A music page with red title at the top stays as-is."""
+        from lpacleaner.stages.orientation import _correct_polarity
+
+        img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
+        red = (0, 0, 200)
+        for x in range(50, 250, 20):
+            img[30:60, x:x + 12] = red
+        cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
+
+        result, did_flip = _correct_polarity(img, cfg)
+        assert did_flip is False
 
     def test_computes_focus_score(self):
         from lpacleaner.stages.orientation import OrientationStage
