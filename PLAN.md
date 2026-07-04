@@ -27,6 +27,40 @@ physical condition (coastal preservation, humidity damage, aging).
    AI dewarping via OpenVINO on GPU. Parallelism auto-scales to available
    RAM.
 
+## Implementation Status
+
+| Step | Component | Status | Tests | Commit |
+|------|-----------|--------|-------|--------|
+| 1 | Project scaffolding | **Done** | conftest.py + fixtures | `4cb5f87` |
+| 2 | utils/image_io.py | **Done** | 17 tests | `4cb5f87` |
+| 3 | utils/accel.py | **Done** | 15 tests | `4cb5f87` |
+| 4 | utils/line_detect.py | **Done** | 21 tests | `d0ee9d4` |
+| 5 | utils/preprocess.py | **Done** | 10 tests | `d0ee9d4` |
+| 6 | config.py | **Done** | 21 tests | `4cb5f87` |
+| -- | utils/geometry.py | **Done** | 11 tests | `d0ee9d4` |
+| -- | pipeline.py (BaseStage, PipelineState) | **Done** | 16 tests | `d944406` |
+| 7 | Stage 0 (preprocess) | **Done** | 18 tests | `9de99a7` |
+| 8 | Stage 1 (stitch) | **Done** | 23 tests | `3632cdb` |
+| 9 | stages/analyze.py | Pending | | |
+| 10 | Stage 2 (orientation) | Pending | | |
+| 11 | Stage 3 (lens correct) | Pending | | |
+| 12 | Stage 4 (page detect) | Pending | | |
+| 13 | Stage 5 (perspective) | Pending | | |
+| 14 | Stage 6 (content area) | Pending | | |
+| 15 | Stage 8 (deskew) | Pending | | |
+| 16 | Stage 7 (dewarp) | Pending | | |
+| 17 | Stage 9 (enhance) | Pending | | |
+| 18 | Stage 10 (normalize) | Pending | | |
+| 19 | Stage 11 (OCR) | Pending | | |
+| 20 | Stage 12 (PDF assembly) | Pending | | |
+| 21 | Pipeline orchestrator | Pending | | |
+| 22 | CLI polish | Pending | | |
+| 23 | Integration tests | Pending | | |
+
+**Totals:** 152 tests, all green, 85% coverage (as of `45ea8c0`).
+
+---
+
 ## Reference Input (LPA-1 San Nicolas)
 
 Measured from the first book to calibrate default parameters:
@@ -1149,6 +1183,86 @@ Persisted state for resume, cache invalidation, and end-of-run reporting:
   stage + downstream are invalidated
 - `done`: per-stage set of completed image stems; used for per-image resume
 - `results`: per-stage outcome counts for the end-of-run summary
+
+---
+
+## Pipeline Orchestrator
+
+The `run_pipeline()` function in `pipeline.py` chains all stages in order,
+passing each stage's output directory as the next stage's input directory.
+
+### Stage Chain
+
+```python
+STAGE_ORDER = [
+    PreprocessStage(),     # 0: hotspot + finger removal
+    StitchStage(),         # 1: grouping + stitching
+    OrientationStage(),    # 2: rotation + 180-deg disambiguation
+    LensCorrectStage(),    # 3: barrel/pincushion correction
+    PageDetectStage(),     # 4: page quad detection
+    PerspectiveStage(),    # 5: perspective correction
+    ContentAreaStage(),    # 6: border detection + crop
+    DeSkewStage(),         # 8: staff line angle or projection profile
+    DewarpStage(),         # 7: polynomial mesh or AI dewarping
+    EnhanceStage(),        # 9: color correction, denoising, sharpening
+    NormalizeStage(),      # 10: cross-page color + DPI
+    OCRStage(),            # 11: Tesseract/Kraken OCR
+    PDFAssemblyStage(),    # 12: final PDF output
+]
+```
+
+Note: Stage 8 (deskew) runs before Stage 7 (dewarp) in the implementation
+because deskew validates the staff line detection pipeline that dewarp
+depends on. The stage numbers reflect their logical function, not execution
+order.
+
+### Orchestration Logic
+
+```python
+def run_pipeline(cfg: Config) -> PipelineState:
+    state = PipelineState.load(cfg.output_dir)
+    input_dir = cfg.input_dir
+
+    # Auto-analyze if no book.toml exists
+    if not (cfg.input_dir / "book.toml").exists():
+        analyze(cfg)
+
+    for stage in STAGE_ORDER:
+        if stage.should_skip(cfg):
+            input_dir = previous_stage_dir  # pass through
+            continue
+
+        result = stage.run(input_dir, cfg.output_dir, cfg, state)
+        state.record_result(result)
+        state.save()
+
+        input_dir = cfg.output_dir / stage.checkpoint_name
+
+    print_end_of_run_report(state)
+    return state
+```
+
+### Progress Reporting
+
+Each stage emits progress via `tqdm` (when available) or plain logging:
+
+```
+[Stage 0] Pre-processing... 225/225 [00:03, 75.0 img/s]
+[Stage 1] Grouping & stitching... 220/220 [00:15, 14.7 img/s]
+[Stage 2] Orienting images... 220/220 [00:12, 18.3 img/s]
+...
+[Stage 12] Assembling PDF... done (222 pages, 185 MB)
+
+=== Pipeline Complete ===
+Processed 222/225 images in 12m34s.
+  2 flagged (soft fallback): IMG_0045 (low focus), IMG_0013 (no staff lines)
+  1 excluded (critical failure): IMG_0080 (Stage 4: no page quad found)
+Output: /path/to/output/output.pdf
+Config source: analyzed (book.toml)
+```
+
+If `--quiet`: only errors, warnings, and the final summary.
+If `--verbose`: per-image timing and parameter values.
 
 ---
 
@@ -2490,26 +2604,28 @@ Development follows TDD. For each step: write failing tests first,
 then implement, then refactor. Build bottom-up, testing each piece
 on synthetic images:
 
-1. **Project scaffolding**: pyproject.toml, empty modules, CLI skeleton, test infrastructure (conftest.py, fixture generators)
-2. **utils/image_io.py**: EXIF-aware load, PNG save with atomic writes, checkpoints
-3. **utils/accel.py**: GPU detection, UMat wrappers
-4. **utils/line_detect.py**: generic ink mask, geometric filter (R9), illustration exclusion (R4), staff line detection
-5. **utils/preprocess.py**: hotspot removal (R1), finger detection (R8)
-6. **config.py**: Config dataclass with all params, TOML loading, profile resolution
-7. **Stage 0** (preprocess): wire preprocess.py into pipeline (runs before stitch)
-8. **Stage 1** (stitch): image grouping (ORB features, homography), cv2.Stitcher, retake dedup, non-content detection
-9. **stages/analyze.py**: auto-detect book characteristics (including partial photo detection), generate book.toml
-10. **Stage 2** (orientation): EXIF + ink line angle + 180deg disambiguation + focus QA
-11. **Stage 3** (lens correct, optional): radial distortion correction (R7) -- simple, build early
-12. **Stage 4** (page detect): Otsu + fallback chain (R2), page type classification
-13. **Stage 5** (perspective): homography from quad corners, background fill
-14. **Stage 6** (content area): border detection, edge masking, margins
-15. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim (build before 7 to validate line_detect.py)
-16. **Stage 7** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
-17. **Stage 9** (enhance): R3 color cast, illumination, shadows (R5), stains (R6), halos (R10), show-through, CLAHE, salt (R11), denoise, sharpen
-18. **Stage 10** (normalize): cross-page color + DPI (global pass)
-19. **Stage 11** (OCR): Tesseract integration, graceful skip if missing
-20. **Stage 12** (PDF): ocrmypdf / img2pdf assembly, configurable compression
-21. **pipeline.py**: orchestrator with per-image resume, adaptive parallelism, atomic state
-22. **CLI polish**: progress bars, error handling, `inspect` + `review` commands
-23. **Integration tests**: full-pipeline tests, CLI tests, output validation
+1. ~~**Project scaffolding**~~: ✅ pyproject.toml, empty modules, CLI skeleton, conftest.py
+2. ~~**utils/image_io.py**~~: ✅ EXIF-aware load, PNG save with atomic writes, checkpoints
+3. ~~**utils/accel.py**~~: ✅ GPU detection, UMat wrappers
+4. ~~**utils/line_detect.py**~~: ✅ ink mask, geometric filter (R9), illustration exclusion (R4), staff lines, adaptive polyfit
+5. ~~**utils/preprocess.py**~~: ✅ hotspot removal (R1), finger detection (R8)
+6. ~~**config.py**~~: ✅ Config dataclass with all params, TOML loading, profile resolution, stitch params
+7. ~~**Stage 0** (preprocess)~~: ✅ wire preprocess.py into BaseStage (18 tests)
+8. ~~**Stage 1** (stitch)~~: ✅ grouping, stitching fallback chain, retake dedup, non-content detection (23 tests)
+9. **stages/analyze.py**: auto-detect book characteristics, generate book.toml, median-based robustness
+10. **Stage 2** (orientation): EXIF + ink line angle + 180deg disambiguation + focus QA + graceful degradation
+11. **Real image smoke test**: run Stages 0-1-2 on LPA-1 samples, visual inspection
+12. **Stage 3** (lens correct, optional): radial distortion correction (R7) -- simple
+13. **Stage 4** (page detect): Otsu + fallback chain (R2), page type classification
+14. **Stage 5** (perspective): homography from quad corners, background fill
+15. **Stage 6** (content area): border detection, edge masking, margins
+16. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim
+17. **Stage 7** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
+18. **Stage 9** (enhance): R3 color cast, illumination, shadows (R5), stains (R6), halos (R10), show-through, CLAHE, salt (R11), denoise, sharpen
+19. **Stage 10** (normalize): cross-page color + DPI (global pass, batch stage)
+20. **Stage 11** (OCR): Tesseract integration, graceful skip if missing, Kraken optional
+21. **Stage 12** (PDF): ocrmypdf / img2pdf assembly, configurable compression (batch stage)
+22. **pipeline.py**: orchestrator -- chain stages, progress reporting, end-of-run summary
+23. **CLI polish**: tqdm progress bars, `inspect` + `review` commands, error handling UX
+24. **Integration tests**: full-pipeline tests, CLI tests, output validation
+25. **Performance**: memory optimization (GitHub #1), parallelism tuning
