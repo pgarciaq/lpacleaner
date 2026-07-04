@@ -1503,8 +1503,43 @@ Atomic writes:
   exists fully or doesn't. A crash during write leaves only the
   .tmp file, which is cleaned up on the next run.
 
+Config-aware invalidation:
+  Each stage declares which config fields it depends on. When the
+  pipeline starts, it hashes the relevant config fields per stage
+  and compares with the hashes stored in pipeline.json from the
+  previous run.
+
+  Stage dependency map (stored in code, not config):
+    Stage 0:  [hotspot_*, finger_*]
+    Stage 1:  [stitch_*]
+    Stage 2:  [orient_*, staff_color_*, focus_*]
+    Stage 3:  [lens_*]
+    Stage 4:  [page_detect_*]
+    Stage 5:  (none -- only depends on Stage 4 corners)
+    Stage 6:  [content_*, staff_color_*, has_border_frame]
+    Stage 7:  [dewarp_*, staff_color_*, ai_dewarp]
+    Stage 8:  [deskew_*, staff_color_*]
+    Stage 9:  [enhance_*, color_cast_*, shadow_*, stain_*, halo_*, salt_*]
+    Stage 10: [normalize_*]
+    Stage 11: [ocr_*]
+    Stage 12: [pdf_*]
+
+  If any field in a stage's dependency set has changed since the last
+  run, ALL images in that stage are invalidated AND all downstream
+  stages are invalidated too (since they consume this stage's output).
+
+  Example: changing staff_color_hue invalidates stages 2, 6, 7, 8
+  and everything downstream (9, 10, 11, 12).
+
+  pipeline.json stores:
+    "config_hashes": {
+      "stage_2": "a1b2c3...",
+      "stage_7": "d4e5f6...",
+      ...
+    }
+
 Force re-run:
-  --force-stage N   reprocesses all images in stage N
+  --force-stage N   reprocesses all images in stage N (and downstream)
   --force-all       reprocesses everything from scratch
   Deleting a checkpoint directory also forces re-run of that stage.
 ```
@@ -1747,9 +1782,10 @@ Total per-book: 30-60 minutes. With 15+ books: 8-15 hours.
    per-image with no inter-image dependencies.
    - Default: `--workers N` where N = CPU count / 2 (leave headroom for GPU)
    - Stage 10 (normalize) is the exception: it needs all images first
-2. **Skip unchanged**: If a checkpoint exists and the source image hasn't
-   changed (check mtime), skip that image for that stage. Enables fast
-   re-runs after parameter tuning.
+2. **Skip unchanged**: If a checkpoint exists, the source image mtime
+   hasn't changed, AND the stage's config hash matches the previous run,
+   skip that image. Config changes automatically invalidate affected
+   stages and all downstream stages (see Resumability section).
 3. **GPU batching**: For operations using UMat (CLAHE, remap), batch the
    GPU transfers to amortize overhead.
 4. **Progress reporting**: `tqdm` progress bar per stage showing
