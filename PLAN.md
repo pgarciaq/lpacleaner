@@ -14,11 +14,18 @@ physical condition (coastal preservation, humidity damage, aging).
    variations (flash, shadows, color casts, variable backgrounds) and
    physical damage (foxing, iron gall corrosion, water stains, salt deposits)
    are detected and handled automatically.
-3. **Checkpointed**: Each stage writes its output to a numbered directory.
-   Stages can be re-run independently. The pipeline can resume from any point.
-4. **Hardware-accelerated**: Selective GPU acceleration via OpenCV UMat
+3. **Lossless intermediate format**: All inter-stage checkpoints use PNG
+   (lossless). JPEG compression happens only once, at the very end (PDF
+   assembly), avoiding cumulative generation loss from repeated lossy
+   encode/decode cycles. Input images can be JPEG or PNG.
+4. **Checkpointed and resumable**: Each stage writes its output to a numbered
+   directory. The pipeline resumes at per-image granularity: if interrupted
+   mid-stage, only incomplete images are reprocessed. Atomic writes prevent
+   corrupt checkpoints.
+5. **Hardware-accelerated**: Selective GPU acceleration via OpenCV UMat
    (Intel Arc OpenCL) for Canny, CLAHE, and remap operations. Optional
-   AI dewarping via OpenVINO on GPU.
+   AI dewarping via OpenVINO on GPU. Parallelism auto-scales to available
+   RAM.
 
 ## Reference Input (LPA-1 San Nicolas)
 
@@ -46,6 +53,17 @@ lpacleaner/
   pyproject.toml
   PLAN.md
   README.md
+  tests/
+    conftest.py               # Shared fixtures: synthetic images, temp dirs, Config
+    fixtures/                  # Generated test images (not real photos)
+    test_image_io.py
+    test_line_detect.py
+    test_geometry.py
+    test_preprocess.py
+    test_config.py
+    test_stage_*.py            # One file per stage
+    test_pipeline.py           # Integration tests
+    test_cli.py                # CLI tests
   lpacleaner/
     __init__.py
     cli.py                  # Click CLI: analyze, run, inspect commands
@@ -964,14 +982,36 @@ ocr_blank_stddev_threshold: float = 15
 2. Detect and handle spreads (see K7):
    a. If spread detected in Stage 4: both halves included as separate pages
 
-3. With OCR: ocrmypdf.ocr(images, output.pdf, language=cfg.ocr_lang)
-4. Without OCR (--no-ocr): img2pdf.convert(images)
-5. Page sizing: uniform size based on median aspect ratio
+3. Image compression for PDF:
+   a. Input images are PNG (lossless checkpoints from Stage 10)
+   b. pdf_compression = "jpeg" (default): encode as JPEG quality 90
+      inside the PDF. This is the ONLY lossy step in the entire
+      pipeline. One compression pass = negligible quality loss.
+      Result: ~200MB for 225 pages.
+   c. pdf_compression = "lossless": embed as PNG/Deflate inside PDF.
+      Perfect quality, but ~8GB for 225 pages.
+   d. pdf_compression = "jpeg2000": JPEG 2000 at configurable quality.
+      Better quality/size ratio than JPEG, but slower and not
+      universally supported by PDF viewers.
+   e. Set DPI from EXIF metadata (stored in pipeline.json) or from
+      normalize target DPI (default 300)
+
+4. With OCR: ocrmypdf.ocr(images, output.pdf, language=cfg.ocr_lang)
+5. Without OCR: img2pdf.convert(images)
+6. Page sizing: uniform size based on median aspect ratio
+```
+
+### Parameters
+
+```python
+pdf_compression: str = "jpeg"      # "jpeg", "lossless", "jpeg2000"
+pdf_jpeg_quality: int = 90
+pdf_dpi: int = 300                 # fallback if not in EXIF/metadata
 ```
 
 ### Input/Output
 
-- Input: normalized images + hOCR files
+- Input: normalized PNG images + hOCR files + EXIF metadata
 - Output: `output.pdf`
 
 ---
@@ -1023,10 +1063,26 @@ def get_perspective_transform(src, dst) -> np.ndarray: ...
 ### image_io.py
 
 ```python
-def load_image(path, cfg) -> np.ndarray:
-    """Load with EXIF rotation. No color correction here -- R3 lives in Stage 9."""
+def load_image(path, cfg) -> tuple[np.ndarray, dict]:
+    """Load image, extract and return EXIF metadata, apply EXIF rotation.
+    
+    Returns (image, exif_dict) where exif_dict contains:
+    - orientation, camera_model, datetime, dpi, focal_length, etc.
+    EXIF is extracted via Pillow before converting to numpy array.
+    No color correction here -- R3 lives in Stage 9.
+    Accepts JPEG, PNG, TIFF, or any format Pillow supports.
+    """
 
 def save_checkpoint(img, stage_dir, filename, metadata=None): ...
+    """Save image as PNG (lossless) with atomic write.
+    
+    1. Write to {filename}.tmp in the stage directory
+    2. Atomic rename to {filename}.png
+    3. Write metadata sidecar to {filename}.json if metadata provided
+    This prevents corrupt files if the process is interrupted.
+    Filename extension is always .png regardless of input format.
+    """
+
 def ensure_checkpoint_dir(output_dir, stage_name) -> Path: ...
 ```
 
@@ -1218,6 +1274,96 @@ lpacleaner review "/path/to/book/photos_output"
 | R9 | Foxing/rust discrimination | line_detect.py | On (geometric) | Severity: Yes |
 | R10 | Iron gall ink halo reduction | Stage 9 | On | Severity: Yes |
 | R11 | Salt/efflorescence correction | Stage 9 | On | Severity: Yes |
+
+---
+
+## Resumability and Parallelism
+
+### Per-Image Resume
+
+The pipeline resumes at per-image granularity, not per-stage. If
+interrupted mid-stage (Ctrl+C, crash, power loss), only incomplete
+images are reprocessed on the next run.
+
+```
+Resume algorithm:
+1. For each stage in the pipeline:
+   a. List images that need processing (from previous stage's output)
+   b. For each image, check if output already exists in this stage:
+      - Output file exists AND is a valid PNG (file size > 0,
+        header bytes are PNG magic): skip (already complete)
+      - Output file does not exist: process
+      - Output file exists but is invalid (truncated, zero bytes,
+        no PNG header): delete and reprocess
+   c. Process only the missing/invalid images
+2. Stage is considered complete when all images have valid outputs
+
+Atomic writes:
+  save_checkpoint() writes to {filename}.tmp, then os.rename() to
+  {filename}.png. On POSIX, rename is atomic -- the file either
+  exists fully or doesn't. A crash during write leaves only the
+  .tmp file, which is cleaned up on the next run.
+
+Force re-run:
+  --force-stage N   reprocesses all images in stage N
+  --force-all       reprocesses everything from scratch
+  Deleting a checkpoint directory also forces re-run of that stage.
+```
+
+### Adaptive Parallelism
+
+Worker count auto-scales to available RAM, not just CPU count.
+
+```
+1. Detect available RAM: psutil.virtual_memory().available
+   (or read /proc/meminfo on Linux if psutil unavailable)
+
+2. Estimate memory per worker:
+   - Base: ~150MB (Python process, loaded libraries)
+   - Per image: width × height × 3 × 2 (input + output buffers)
+     For 4000×3000: ~72MB per image
+   - Stage overhead: dewarp mesh, morphological kernels, etc. ~50MB
+   - Total per worker: ~270MB for 12MP images
+
+3. max_workers = min(
+       cpu_count // 2,                    # leave headroom for GPU
+       available_ram_mb // mem_per_worker, # don't exhaust RAM
+       cfg.max_workers                     # user override
+   )
+
+4. Special cases:
+   - Stage 1 (stitch): single-threaded for stitch groups (high
+     memory, internally parallelized by cv2.Stitcher), parallel
+     for standalone images
+   - Stage 10 (normalize): two-pass -- first pass collects stats
+     (parallel), second pass applies normalization (parallel)
+   - Stage 12 (PDF): single-threaded (sequential assembly)
+
+5. Default --workers 0 = auto-detect. Explicit --workers N overrides.
+```
+
+### Pipeline State (`pipeline.json`)
+
+```json
+{
+  "book": "LPA-1 San Nicolas",
+  "started": "2026-07-04T04:30:00",
+  "stages": {
+    "0": {"status": "complete", "processed": 225, "skipped": 220},
+    "1": {"status": "complete", "processed": 225, "stitched_groups": 1},
+    "2": {"status": "complete", "processed": 222, "flagged": ["IMG_0080"]},
+    "7": {"status": "running", "processed": 140, "total": 222}
+  },
+  "exif": {
+    "IMG_0011.JPG": {"camera": "Canon PowerShot SX200 IS", "dpi": 180, ...}
+  },
+  "focus_scores": {
+    "IMG_0011.JPG": 342.5,
+    "IMG_0080.JPG": 45.2
+  },
+  "flags": ["IMG_0080.JPG: low focus score (45.2 < 100)"]
+}
+```
 
 ---
 
@@ -1461,11 +1607,13 @@ dependencies = [
     "click>=8.0",
     "img2pdf>=0.5",
     "ocrmypdf>=16.0",
+    "tqdm>=4.60",
 ]
 
 [project.optional-dependencies]
 ai = ["openvino>=2024.0", "torch>=2.0"]
 historical-ocr = ["kraken>=5.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
 
 [project.scripts]
 lpacleaner = "lpacleaner.cli:main"
@@ -1475,29 +1623,258 @@ System packages: `tesseract`, `tesseract-langpack-lat` (via `dnf`)
 
 ---
 
+## Testing Strategy (TDD)
+
+Development follows strict red-green-refactor TDD: write a failing test
+first, implement just enough code to make it pass, then refactor.
+
+### Project Structure
+
+```
+tests/
+  conftest.py               # Shared fixtures: test images, temp dirs, Config factory
+  fixtures/                  # Synthetic test images (generated, not real photos)
+    music_page_4x3.png       # Synthetic music page with red staff lines
+    text_page_4x3.png        # Synthetic text-only page
+    rotated_90cw.jpg         # Same page with EXIF orientation=6
+    partial_top.png           # Top half of a page (for stitch testing)
+    partial_bottom.png        # Bottom half with overlap
+    blurry_page.png           # Synthetically blurred page
+    finger_on_edge.png        # Page with skin-colored region at border
+    barrel_distorted.png      # Synthetically distorted with known k1
+    book_cover.png            # Dark uniform image (non-content)
+  test_image_io.py
+  test_line_detect.py
+  test_geometry.py
+  test_preprocess.py
+  test_accel.py
+  test_config.py
+  test_stage_stitch.py
+  test_stage_orientation.py
+  test_stage_lens_correct.py
+  test_stage_page_detect.py
+  test_stage_perspective.py
+  test_stage_content_area.py
+  test_stage_dewarp.py
+  test_stage_deskew.py
+  test_stage_enhance.py
+  test_stage_normalize.py
+  test_stage_ocr.py
+  test_stage_pdf_assembly.py
+  test_pipeline.py           # Integration tests
+  test_cli.py                # CLI invocation tests
+```
+
+### Test Fixtures: Synthetic Images
+
+Test images are **generated programmatically**, not extracted from real
+books (which are large, copyrighted, and non-reproducible). Each fixture
+is a function that creates a controlled test image:
+
+```python
+def make_music_page(width=800, height=600, staff_color=(0, 0, 200),
+                    num_staves=4, skew_deg=0, curve_amount=0,
+                    noise_level=0, bg_color=(230, 220, 200)):
+    """Generate a synthetic music page with staff lines, text, and border."""
+
+def make_text_page(width=800, height=600, ...): ...
+def make_page_on_background(page, angle=0, perspective_skew=0, bg=(40,30,25)): ...
+def add_finger(img, position="top-right", size_frac=0.05): ...
+def add_barrel_distortion(img, k1=0.3): ...
+def add_hotspot(img, center, radius): ...
+def blur_image(img, kernel_size=15): ...
+```
+
+Small images (800x600) for fast tests. A few 4000x3000 fixtures
+(marked `@pytest.mark.slow`) for realistic integration tests.
+
+### Test Levels
+
+#### 1. Unit Tests (per function, fast, <1s each)
+
+Every public function in `utils/` gets tests before implementation:
+
+```python
+# test_image_io.py
+class TestLoadImage:
+    def test_loads_jpeg(self, tmp_path): ...
+    def test_loads_png(self, tmp_path): ...
+    def test_applies_exif_rotation(self): ...
+    def test_extracts_exif_metadata(self): ...
+    def test_returns_empty_exif_for_png(self): ...
+
+class TestSaveCheckpoint:
+    def test_saves_as_png(self, tmp_path): ...
+    def test_atomic_write_no_partial_on_interrupt(self, tmp_path): ...
+    def test_writes_metadata_sidecar(self, tmp_path): ...
+    def test_cleans_up_tmp_files(self, tmp_path): ...
+
+# test_line_detect.py
+class TestDetectInkMask:
+    def test_detects_red_staff_lines(self): ...
+    def test_detects_brown_staff_lines(self): ...
+    def test_ignores_background(self): ...
+    def test_fallback_to_channel_difference(self): ...
+
+class TestDetectInkMaskGeometric:
+    def test_filters_round_foxing_spots(self): ...
+    def test_preserves_horizontal_lines(self): ...
+
+class TestDetectStaffLines:
+    def test_finds_expected_number_of_lines(self): ...
+    def test_returns_polynomial_coefficients(self): ...
+    def test_returns_empty_for_text_page(self): ...
+
+# test_geometry.py
+class TestOrderCorners:
+    def test_already_ordered(self): ...
+    def test_shuffled_corners(self): ...
+    def test_near_rectangular(self): ...
+```
+
+#### 2. Stage Tests (per stage, medium, <5s each)
+
+Each stage is tested end-to-end with synthetic inputs:
+
+```python
+# test_stage_orientation.py
+class TestOrientationStage:
+    def test_corrects_90cw_rotation(self): ...
+    def test_corrects_90ccw_rotation(self): ...
+    def test_detects_upside_down_via_text_direction(self): ...
+    def test_passthrough_when_already_correct(self): ...
+    def test_computes_focus_score(self): ...
+    def test_flags_blurry_image(self): ...
+
+# test_stage_page_detect.py
+class TestPageDetectStage:
+    def test_finds_page_on_dark_background(self): ...
+    def test_fallback_to_inverted_otsu(self): ...
+    def test_fallback_to_canny(self): ...
+    def test_detects_spread(self): ...
+    def test_classifies_music_page(self): ...
+    def test_classifies_text_page(self): ...
+    def test_classifies_blank_page(self): ...
+
+# test_stage_deskew.py
+class TestDeskewStage:
+    def test_corrects_3_degree_skew(self): ...
+    def test_skips_when_angle_below_threshold(self): ...
+    def test_uses_projection_profile_for_text_page(self): ...
+    def test_fills_border_with_background_color(self): ...
+    def test_post_geometry_trim(self): ...
+
+# test_stage_enhance.py
+class TestEnhanceStage:
+    def test_sub_steps_run_in_correct_order(self): ...
+    def test_skips_disabled_sub_steps(self): ...
+    def test_color_cast_correction(self): ...
+    def test_shadow_removal(self): ...
+    def test_denoise_reduces_noise(self): ...
+    def test_sharpen_increases_laplacian_variance(self): ...
+```
+
+#### 3. Integration Tests (multi-stage, slow, <30s each)
+
+Test the pipeline end-to-end on synthetic data:
+
+```python
+# test_pipeline.py
+class TestPipeline:
+    def test_full_pipeline_produces_pdf(self, tmp_path): ...
+    def test_geometry_profile_skips_enhance(self, tmp_path): ...
+    def test_resume_after_interrupt(self, tmp_path): ...
+    def test_auto_analyze_when_no_book_toml(self, tmp_path): ...
+    def test_skip_ocr_when_tesseract_missing(self, tmp_path): ...
+    def test_parallel_processing(self, tmp_path): ...
+
+class TestPipelineOutputValidation:
+    def test_pdf_has_correct_page_count(self, tmp_path): ...
+    def test_pdf_pages_have_correct_dpi(self, tmp_path): ...
+    def test_pdf_has_text_layer_when_ocr_enabled(self, tmp_path): ...
+    def test_all_checkpoint_dirs_exist(self, tmp_path): ...
+    def test_pipeline_json_has_all_stages(self, tmp_path): ...
+    def test_flagged_pages_reported(self, tmp_path): ...
+
+# test_cli.py
+class TestCLI:
+    def test_run_with_only_input_dir(self, tmp_path): ...
+    def test_run_with_profile(self, tmp_path): ...
+    def test_run_with_skip_flags(self, tmp_path): ...
+    def test_analyze_generates_book_toml(self, tmp_path): ...
+    def test_review_generates_contact_sheet(self, tmp_path): ...
+```
+
+#### 4. Regression Tests (golden reference, run on real images)
+
+Not part of the standard test suite (requires actual book photos),
+but available via `pytest -m regression`:
+
+```python
+@pytest.mark.regression
+class TestRealBookRegression:
+    """Run on a small set of real images with known-good outputs.
+    
+    Golden references are stored in tests/golden/ as PNG files.
+    Tests compare stage outputs against golden references using
+    structural similarity (SSIM > 0.95) rather than pixel-exact
+    comparison, allowing for minor algorithmic improvements.
+    """
+    def test_lpa1_orientation(self): ...
+    def test_lpa1_page_detect(self): ...
+    def test_lpa1_dewarp(self): ...
+```
+
+### TDD Workflow per Implementation Step
+
+```
+For each item in the Implementation Order:
+1. RED:   Write test(s) for the function/stage (they fail)
+2. GREEN: Implement just enough code to pass the tests
+3. REFACTOR: Clean up, extract helpers, improve naming
+4. VERIFY: Run full test suite (pytest), check no regressions
+5. COMMIT: One commit per red-green-refactor cycle
+```
+
+### Running Tests
+
+```bash
+pytest                           # all unit + stage tests
+pytest -x                        # stop at first failure
+pytest --cov=lpacleaner          # with coverage report
+pytest -m slow                   # only slow tests (4000x3000 images)
+pytest -m regression             # only regression tests (real images)
+pytest tests/test_stage_deskew.py  # single test file
+```
+
+---
+
 ## Implementation Order
 
-Build bottom-up, testing each piece on 5-10 sample images:
+Development follows TDD. For each step: write failing tests first,
+then implement, then refactor. Build bottom-up, testing each piece
+on synthetic images:
 
-1. **Project scaffolding**: pyproject.toml, empty modules, CLI skeleton
-2. **utils/image_io.py**: EXIF-aware load/save, checkpoints
+1. **Project scaffolding**: pyproject.toml, empty modules, CLI skeleton, test infrastructure (conftest.py, fixture generators)
+2. **utils/image_io.py**: EXIF-aware load, PNG save with atomic writes, checkpoints
 3. **utils/accel.py**: GPU detection, UMat wrappers
 4. **utils/line_detect.py**: generic ink mask, geometric filter (R9), illustration exclusion (R4), staff line detection
 5. **utils/preprocess.py**: hotspot removal (R1), finger detection (R8)
-6. **config.py**: Config dataclass with all params, TOML loading
+6. **config.py**: Config dataclass with all params, TOML loading, profile resolution
 7. **Stage 0** (preprocess): wire preprocess.py into pipeline (runs before stitch)
 8. **Stage 1** (stitch): image grouping (ORB features, homography), cv2.Stitcher, retake dedup, non-content detection
 9. **stages/analyze.py**: auto-detect book characteristics (including partial photo detection), generate book.toml
-10. **Stage 2** (orientation): EXIF + ink line angle + 180deg disambiguation
+10. **Stage 2** (orientation): EXIF + ink line angle + 180deg disambiguation + focus QA
 11. **Stage 3** (lens correct, optional): radial distortion correction (R7) -- simple, build early
 12. **Stage 4** (page detect): Otsu + fallback chain (R2), page type classification
-13. **Stage 5** (perspective): homography from quad corners
+13. **Stage 5** (perspective): homography from quad corners, background fill
 14. **Stage 6** (content area): border detection, edge masking, margins
-15. **Stage 8** (deskew): staff angle or projection profile (build before 7 to validate line_detect.py)
-16. **Stage 7** (dewarp): polynomial mesh from staff lines (most complex stage)
+15. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim (build before 7 to validate line_detect.py)
+16. **Stage 7** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
 17. **Stage 9** (enhance): R3 color cast, illumination, shadows (R5), stains (R6), halos (R10), show-through, CLAHE, salt (R11), denoise, sharpen
 18. **Stage 10** (normalize): cross-page color + DPI (global pass)
-19. **Stage 11** (OCR): Tesseract integration
-20. **Stage 12** (PDF): ocrmypdf / img2pdf assembly
-21. **pipeline.py**: orchestrator with checkpointing, parallelism (K8), skip-unchanged
+19. **Stage 11** (OCR): Tesseract integration, graceful skip if missing
+20. **Stage 12** (PDF): ocrmypdf / img2pdf assembly, configurable compression
+21. **pipeline.py**: orchestrator with per-image resume, adaptive parallelism, atomic state
 22. **CLI polish**: progress bars, error handling, `inspect` + `review` commands
+23. **Integration tests**: full-pipeline tests, CLI tests, output validation
