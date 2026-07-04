@@ -168,9 +168,21 @@ def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
         logger.debug("OSD detected 0° (conf=%.2f) → no flip", osd_conf)
         return img, False
 
+    # --- Phase 1b: Adaptive OSD (higher res, binarized) ---
+    osd_deg2, osd_conf2 = _detect_osd_rotation_adaptive(img)
+    if osd_conf2 >= _OSD_MIN_CONFIDENCE and osd_deg2 in (0, 180):
+        if osd_deg2 == 180:
+            logger.info(
+                "OSD-adaptive detected 180° (conf=%.2f) → rotating 180°",
+                osd_conf2,
+            )
+            return cv2.rotate(img, cv2.ROTATE_180), True
+        logger.debug("OSD-adaptive detected 0° (conf=%.2f) → no flip", osd_conf2)
+        return img, False
+
     logger.debug(
-        "OSD inconclusive (deg=%s, conf=%.2f) → trying title detection",
-        osd_deg, osd_conf,
+        "OSD inconclusive (deg=%s/%.2f, adaptive=%s/%.2f) → trying title detection",
+        osd_deg, osd_conf, osd_deg2, osd_conf2,
     )
 
     # --- Phase 2: Red title detection ---
@@ -200,6 +212,45 @@ def _detect_osd_rotation(img: np.ndarray) -> tuple[int | None, float]:
     pil = Image.fromarray(rgb)
     try:
         osd = pytesseract.image_to_osd(pil)
+    except pytesseract.TesseractError:
+        return None, 0.0
+
+    degrees: int | None = None
+    confidence = 0.0
+    for line in osd.split("\n"):
+        if "Orientation in degrees" in line:
+            degrees = int(line.split(":")[1].strip())
+        elif "Orientation confidence" in line:
+            confidence = float(line.split(":")[1].strip())
+    return degrees, confidence
+
+
+def _detect_osd_rotation_adaptive(img: np.ndarray) -> tuple[int | None, float]:
+    """Run Tesseract OSD on an adaptive-thresholded version at higher resolution.
+
+    Fallback for when standard OSD is inconclusive.  Adaptive thresholding
+    cleans up aged manuscript text (removing stains, ink bleed, parchment
+    texture) and the higher resolution preserves small character detail
+    that OSD needs for letter-shape analysis.
+
+    Returns (degrees, confidence).
+    """
+    h, w = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    adaptive = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15,
+    )
+
+    max_dim = max(h, w)
+    scale = min(1.0, 2000.0 / max_dim)
+    if scale < 1.0:
+        small = cv2.resize(adaptive, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    else:
+        small = adaptive
+
+    pil = Image.fromarray(small)
+    try:
+        osd = pytesseract.image_to_osd(pil, config="--dpi 300")
     except pytesseract.TesseractError:
         return None, 0.0
 
