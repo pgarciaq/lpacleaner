@@ -18,6 +18,7 @@ dependencies = [
     "tomli>=2.0;python_version<'3.11'",
     "img2pdf>=0.5",
     "ocrmypdf>=16.0",
+    "pytesseract>=0.3.10",
 ]
 
 [project.optional-dependencies]

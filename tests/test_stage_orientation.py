@@ -156,13 +156,50 @@ class TestOrientationProcessImage:
         assert result_img.shape[0] > result_img.shape[1]
         assert "portrait_fallback" in meta["orientation_method"]
 
+    def test_osd_detects_upside_down_text(self):
+        """OSD correctly detects upside-down text and flips."""
+        from lpacleaner.stages.orientation import _detect_osd_rotation
+
+        img = np.full((600, 400, 3), 255, dtype=np.uint8)
+        cv2.putText(img, "Test Text Sample", (30, 200),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
+        cv2.putText(img, "More Lines Here", (30, 260),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
+        upside_down = cv2.rotate(img, cv2.ROTATE_180)
+
+        deg, conf = _detect_osd_rotation(upside_down)
+        assert deg == 180, f"Expected 180°, got {deg}° (conf={conf})"
+
+    def test_osd_keeps_upright_text(self):
+        """OSD correctly identifies upright text."""
+        from lpacleaner.stages.orientation import _detect_osd_rotation
+
+        img = np.full((600, 400, 3), 255, dtype=np.uint8)
+        cv2.putText(img, "Test Text Sample", (30, 200),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
+        cv2.putText(img, "More Lines Here", (30, 260),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
+
+        deg, conf = _detect_osd_rotation(img)
+        assert deg == 0, f"Expected 0°, got {deg}° (conf={conf})"
+
+    def test_osd_returns_none_on_blank(self):
+        """OSD gracefully returns None on blank images."""
+        from lpacleaner.stages.orientation import _detect_osd_rotation
+
+        img = np.full((400, 300, 3), 255, dtype=np.uint8)
+        deg, conf = _detect_osd_rotation(img)
+        assert deg is None or conf < 2.0
+
     def test_polarity_flips_upside_down_page(self):
-        """A page with red title at the bottom edge (upside-down) gets flipped."""
+        """A page with red title at the bottom edge (upside-down) gets flipped.
+
+        On small synthetic images OSD fails, so the title fallback decides.
+        """
         from lpacleaner.stages.orientation import _correct_polarity
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
-        # Place red title characters near the bottom edge (within 10% zone)
         for x in range(50, 250, 20):
             img[375:395, x : x + 12] = red
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
@@ -176,7 +213,6 @@ class TestOrientationProcessImage:
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
-        # Place red title characters near the top edge (within 10% zone)
         for x in range(50, 250, 20):
             img[5:25, x : x + 12] = red
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
@@ -191,10 +227,8 @@ class TestOrientationProcessImage:
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
         dark = (30, 30, 30)
-        # Red title near the top edge
         for x in range(50, 250, 20):
             img[5:25, x : x + 12] = red
-        # Red rubrics mixed with dark text near the bottom edge
         for x in range(50, 250, 40):
             img[370:385, x : x + 8] = red
             img[370:385, x + 10 : x + 30] = dark
@@ -207,8 +241,6 @@ class TestOrientationProcessImage:
         """A rusty/textured surface should fail the staff-area validation."""
         from lpacleaner.stages.orientation import _has_real_staff_lines
 
-        # Simulate a rusty cover: large horizontal red patches covering
-        # > 5% of image area (real covers reach ~15%).
         img = np.full((1200, 1600, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
         for y in range(100, 1100, 8):
@@ -225,6 +257,15 @@ class TestOrientationProcessImage:
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
 
         assert _has_real_staff_lines(img, cfg) is True
+
+    def test_staff_area_rejects_blank_page(self):
+        """A blank/dirty page with no red ink should fail validation."""
+        from lpacleaner.stages.orientation import _has_real_staff_lines
+
+        img = np.full((1200, 1600, 3), (230, 220, 200), dtype=np.uint8)
+        cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
+
+        assert _has_real_staff_lines(img, cfg) is False
 
     def test_spine_detection_flips_when_spine_on_right(self):
         """Spine on the right edge (darker, more saturated) triggers flip."""

@@ -5,16 +5,13 @@ Two-phase content-based orientation:
    rotate 0° or 90° so staff lines run left-to-right.  A staff-area
    validation rejects textured surfaces (e.g. rusty book covers) that
    generate many false horizontal lines.
-2. **Polarity detection**: compares title-eligible red ink in the top
-   vs bottom edges of the page.  Title-eligible rows are those with
-   significant red coverage and very little dark/black text in the
-   central area (titles are pure red lines; body rubrics are always
-   mixed with dark text).  Only the outer 15% edges are compared,
-   ignoring body content in the middle 70%.
-3. **Spine fallback**: when no red title signal is available (covers,
-   blanks), compares left/right edge saturation-to-brightness ratios.
-   The more-saturated, darker edge is assumed to be the spine and is
-   placed on the left (standard Western book orientation).
+2. **Polarity detection** (cascading):
+   a. **Tesseract OSD**: analyses letter shapes to detect text at 0°
+      or 180°.  Used as primary detector when confidence is adequate.
+   b. **Red title detection**: weighted edge comparison of title-
+      eligible red ink.  Fallback for when OSD is uncertain.
+   c. **Spine detection**: compares left/right edge S/V ratios.
+      Last-resort fallback for covers and blank pages.
 
 Falls back to portrait enforcement for non-music pages (covers, blanks).
 EXIF is intentionally not relied upon.
@@ -30,6 +27,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytesseract
+from PIL import Image
 
 from lpacleaner.config import Config
 from lpacleaner.pipeline import BaseStage
@@ -40,6 +39,8 @@ logger = logging.getLogger(__name__)
 _FOCUS_THRESHOLD_DEFAULT = 100.0
 _HORIZONTAL_LINE_MIN_COUNT = 5
 _STAFF_AREA_MAX = 0.05
+_RED_AREA_MIN = 0.005
+_OSD_MIN_CONFIDENCE = 2.0
 
 
 class OrientationStage(BaseStage):
@@ -147,25 +148,78 @@ def _orient_by_content(
 
 
 def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
-    """Check if the image is upside-down using weighted edge title detection.
+    """Check if the image is upside-down using a cascade of detectors.
 
-    Chant book pages have a red title line near the top of the page.
-    Titles are close to the page edge with very little blank space.
-    Body rubrics and section headers appear deeper inside the page.
-
-    Algorithm:
-    1. Build a non-staff red mask and a dark ink mask.
-    2. For each row, classify it as "title-eligible" when it has
-       significant red coverage (>3%) and little dark text (<2.5%)
-       in the central 80% of the row.
-    3. Keep only red pixels on title-eligible rows.
-    4. Compare weighted scores in the top 10% vs bottom 10% of the
-       image.  Pixels closer to the physical edge receive higher
-       weight (linear decay), favoring actual titles over section
-       headers deeper in the page body.
-    5. If the bottom edge scores higher → upside-down → rotate 180°.
+    Tries three methods in order until one produces a confident result:
+    1. Tesseract OSD -- detects text orientation from letter shapes.
+    2. Red title detection -- weighted edge comparison of title-eligible
+       red ink (specific to chant books with red titles).
+    3. Spine detection -- S/V ratio comparison of left/right edges
+       (for covers and blank pages).
 
     Returns (image, did_flip).
+    """
+    # --- Phase 1: Tesseract OSD ---
+    osd_deg, osd_conf = _detect_osd_rotation(img)
+    if osd_conf >= _OSD_MIN_CONFIDENCE and osd_deg in (0, 180):
+        if osd_deg == 180:
+            logger.info("OSD detected 180° (conf=%.2f) → rotating 180°", osd_conf)
+            return cv2.rotate(img, cv2.ROTATE_180), True
+        logger.debug("OSD detected 0° (conf=%.2f) → no flip", osd_conf)
+        return img, False
+
+    logger.debug(
+        "OSD inconclusive (deg=%s, conf=%.2f) → trying title detection",
+        osd_deg, osd_conf,
+    )
+
+    # --- Phase 2: Red title detection ---
+    flipped, did_flip, title_decided = _detect_title_polarity(img, cfg)
+    if title_decided:
+        return flipped, did_flip
+
+    # --- Phase 3: Spine detection ---
+    return _detect_spine_polarity(img)
+
+
+def _detect_osd_rotation(img: np.ndarray) -> tuple[int | None, float]:
+    """Run Tesseract OSD to detect text orientation.
+
+    Returns (degrees, confidence).  *degrees* is 0, 90, 180, or 270
+    on success, ``None`` on failure.
+    """
+    h, w = img.shape[:2]
+    max_dim = max(h, w)
+    scale = min(1.0, 1200.0 / max_dim)
+    if scale < 1.0:
+        small = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    else:
+        small = img
+
+    rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+    pil = Image.fromarray(rgb)
+    try:
+        osd = pytesseract.image_to_osd(pil)
+    except pytesseract.TesseractError:
+        return None, 0.0
+
+    degrees: int | None = None
+    confidence = 0.0
+    for line in osd.split("\n"):
+        if "Orientation in degrees" in line:
+            degrees = int(line.split(":")[1].strip())
+        elif "Orientation confidence" in line:
+            confidence = float(line.split(":")[1].strip())
+    return degrees, confidence
+
+
+def _detect_title_polarity(
+    img: np.ndarray, cfg: Config,
+) -> tuple[np.ndarray, bool, bool]:
+    """Detect polarity via weighted red-title edge comparison.
+
+    Returns (image, did_flip, decided).  *decided* is False when the
+    title signal is too weak to make a call.
     """
     oh, ow = img.shape[:2]
 
@@ -214,39 +268,36 @@ def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
     total_score = top_score + bot_score
 
     logger.debug(
-        "Polarity: title_score top=%.0f bot=%.0f (edge=%.0f%%)",
-        top_score,
-        bot_score,
-        edge_frac * 100,
+        "Title polarity: top=%.0f bot=%.0f (edge=%.0f%%)",
+        top_score, bot_score, edge_frac * 100,
     )
 
     if total_score < 50:
-        logger.debug("Polarity: insufficient title signal (%.0f)", total_score)
-        return _detect_spine_polarity(img)
+        logger.debug("Title polarity: insufficient signal (%.0f)", total_score)
+        return img, False, False
 
     if bot_score > top_score:
         logger.info(
-            "Title signal at bottom edge (%.0f) > top (%.0f) → rotating 180°",
-            bot_score,
-            top_score,
+            "Title at bottom edge (%.0f) > top (%.0f) → rotating 180°",
+            bot_score, top_score,
         )
-        return cv2.rotate(img, cv2.ROTATE_180), True
+        return cv2.rotate(img, cv2.ROTATE_180), True, True
 
-    return img, False
+    return img, False, True
 
 
 def _has_real_staff_lines(img: np.ndarray, cfg: Config) -> bool:
     """Check whether detected horizontal lines are real staff lines.
 
-    Textured surfaces (e.g. rusty book covers) generate many false
-    horizontal lines in HoughLinesP.  Real staff lines are *thin*
-    horizontal red structures that occupy a tiny fraction of the image
-    area.  On a textured surface the red that survives a horizontal
-    morphological opening is *wide* (patches, not lines) and covers
-    a much larger area fraction.
+    Two checks are applied:
+    1. **Minimum red area** (``_RED_AREA_MIN``): pages with almost no
+       red ink (blank, dirty) produce false positive horizontal line
+       segments from scratches and stains.
+    2. **Maximum staff area** (``_STAFF_AREA_MAX``): textured surfaces
+       (rusty covers) produce wide red patches that survive the
+       horizontal morphological opening, unlike thin staff lines.
 
-    Returns True if the staff-like red area is small enough to be
-    credible staff lines (< ``_STAFF_AREA_MAX``).
+    Returns True only when the red ink is present but not excessive.
     """
     oh, ow = img.shape[:2]
 
@@ -259,6 +310,14 @@ def _has_real_staff_lines(img: np.ndarray, cfg: Config) -> bool:
         180 - np.abs(hue - cfg.staff_color_hue),
     )
     red_mask = ((hue_diff < cfg.staff_color_range) & (sat > 120)).astype(np.uint8) * 255
+
+    red_area = np.count_nonzero(red_mask) / (oh * ow)
+    if red_area < _RED_AREA_MIN:
+        logger.debug(
+            "Red area too small (%.4f < %.4f) → not a music page",
+            red_area, _RED_AREA_MIN,
+        )
+        return False
 
     horiz_kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT, (max(ow // 20, 30), 1)
