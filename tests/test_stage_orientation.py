@@ -162,9 +162,9 @@ class TestOrientationProcessImage:
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
-        # Place red title characters in the bottom 15% (y > 340)
+        # Place red title characters near the bottom edge (within 10% zone)
         for x in range(50, 250, 20):
-            img[355:375, x : x + 12] = red
+            img[375:395, x : x + 12] = red
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
 
         result, did_flip = _correct_polarity(img, cfg)
@@ -176,9 +176,9 @@ class TestOrientationProcessImage:
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
-        # Place red title characters in the top 15% (y < 60)
+        # Place red title characters near the top edge (within 10% zone)
         for x in range(50, 250, 20):
-            img[25:45, x : x + 12] = red
+            img[5:25, x : x + 12] = red
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
 
         result, did_flip = _correct_polarity(img, cfg)
@@ -191,13 +191,13 @@ class TestOrientationProcessImage:
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
         dark = (30, 30, 30)
-        # Red title in the top edge
+        # Red title near the top edge
         for x in range(50, 250, 20):
-            img[25:45, x : x + 12] = red
-        # Red rubrics mixed with dark text in the bottom edge
+            img[5:25, x : x + 12] = red
+        # Red rubrics mixed with dark text near the bottom edge
         for x in range(50, 250, 40):
-            img[360:375, x : x + 8] = red
-            img[360:375, x + 10 : x + 30] = dark
+            img[370:385, x : x + 8] = red
+            img[370:385, x + 10 : x + 30] = dark
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
 
         result, did_flip = _correct_polarity(img, cfg)

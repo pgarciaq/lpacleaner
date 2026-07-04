@@ -147,24 +147,23 @@ def _orient_by_content(
 
 
 def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
-    """Check if the image is upside-down using edge-only title detection.
+    """Check if the image is upside-down using weighted edge title detection.
 
     Chant book pages have a red title line near the top of the page.
-    Titles are a single line of pure red text spanning the page width
-    with no (or very little) dark/black text on the same rows.  Body
-    rubrics (red initials, decorated letters) always appear on rows
-    that also contain dark text.
+    Titles are close to the page edge with very little blank space.
+    Body rubrics and section headers appear deeper inside the page.
 
     Algorithm:
     1. Build a non-staff red mask and a dark ink mask.
     2. For each row, classify it as "title-eligible" when it has
-       significant red coverage (>3%) and very little dark text
-       (<1.5%) in the central 80% of the row.
+       significant red coverage (>3%) and little dark text (<2.5%)
+       in the central 80% of the row.
     3. Keep only red pixels on title-eligible rows.
-    4. Compare these pixels in the top *edge_frac* vs bottom
-       *edge_frac* of the image (ignoring the body middle).
-    5. If the bottom edge has more title red → the page is
-       upside-down → rotate 180°.
+    4. Compare weighted scores in the top 10% vs bottom 10% of the
+       image.  Pixels closer to the physical edge receive higher
+       weight (linear decay), favoring actual titles over section
+       headers deeper in the page body.
+    5. If the bottom edge scores higher → upside-down → rotate 180°.
 
     Returns (image, did_flip).
     """
@@ -183,57 +182,53 @@ def _correct_polarity(img: np.ndarray, cfg: Config) -> tuple[np.ndarray, bool]:
     )
     red_mask = ((hue_diff < ink_range) & (sat > 120)).astype(np.uint8) * 255
 
-    # Remove horizontal staff line structures
     horiz_kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT, (max(ow // 20, 30), 1)
     )
     staff_only = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, horiz_kernel)
     non_staff_red = cv2.subtract(red_mask, staff_only)
 
-    # Dark ink mask (black text, neumes, etc.)
     dark_mask = (val < 80).astype(np.uint8)
 
-    # Per-row dark coverage in the central 80% (ignore corners where
-    # page numbers may appear in black).
     margin = int(ow * 0.10)
     central_width = max(ow - 2 * margin, 1)
     central_dark_per_row = (
         np.sum(dark_mask[:, margin : ow - margin], axis=1) / central_width
     )
 
-    # Per-row red coverage
     red_per_row = np.sum(non_staff_red > 0, axis=1) / ow
 
-    # Title-eligible rows: significant red AND very little dark
-    exclude = (red_per_row < 0.03) | (central_dark_per_row > 0.015)
+    exclude = (red_per_row < 0.03) | (central_dark_per_row > 0.025)
     title_red = non_staff_red.copy()
     title_red[exclude] = 0
 
-    # Compare edge zones only (top 15% vs bottom 15%)
-    edge_frac = 0.15
+    edge_frac = 0.10
     top_cut = int(oh * edge_frac)
     bot_cut = int(oh * (1.0 - edge_frac))
 
-    top_px = int(np.count_nonzero(title_red[:top_cut]))
-    bot_px = int(np.count_nonzero(title_red[bot_cut:]))
-    total_edge = top_px + bot_px
+    top_weights = np.linspace(1.0, 0.0, top_cut).reshape(-1, 1)
+    bot_weights = np.linspace(0.0, 1.0, oh - bot_cut).reshape(-1, 1)
+
+    top_score = float(np.sum((title_red[:top_cut] > 0) * top_weights))
+    bot_score = float(np.sum((title_red[bot_cut:] > 0) * bot_weights))
+    total_score = top_score + bot_score
 
     logger.debug(
-        "Polarity: title_red top=%d bot=%d (edge=%.0f%%)",
-        top_px,
-        bot_px,
+        "Polarity: title_score top=%.0f bot=%.0f (edge=%.0f%%)",
+        top_score,
+        bot_score,
         edge_frac * 100,
     )
 
-    if total_edge < 50:
-        logger.debug("Polarity: insufficient title red at edges (%d)", total_edge)
+    if total_score < 50:
+        logger.debug("Polarity: insufficient title signal (%.0f)", total_score)
         return _detect_spine_polarity(img)
 
-    if bot_px > top_px:
+    if bot_score > top_score:
         logger.info(
-            "Title red at bottom edge (%d) > top (%d) → rotating 180°",
-            bot_px,
-            top_px,
+            "Title signal at bottom edge (%.0f) > top (%.0f) → rotating 180°",
+            bot_score,
+            top_score,
         )
         return cv2.rotate(img, cv2.ROTATE_180), True
 
