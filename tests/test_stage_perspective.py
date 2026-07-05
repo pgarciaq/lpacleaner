@@ -338,10 +338,10 @@ class TestBackgroundFill:
 
     def test_estimate_background_on_dark_image(self):
         """Background estimation on a dark border image."""
-        from lpacleaner.stages.perspective import _estimate_background
+        from lpacleaner.utils.image_utils import estimate_background
 
         dark = np.full((400, 600, 3), (30, 25, 20), dtype=np.uint8)
-        bg = _estimate_background(dark)
+        bg = estimate_background(dark)
 
         assert len(bg) == 3
         for i, expected in enumerate((30, 25, 20)):
@@ -349,10 +349,10 @@ class TestBackgroundFill:
 
     def test_estimate_background_on_grayscale(self):
         """Background estimation should work on single-channel images."""
-        from lpacleaner.stages.perspective import _estimate_background
+        from lpacleaner.utils.image_utils import estimate_background
 
         gray = np.full((400, 600), 180, dtype=np.uint8)
-        bg = _estimate_background(gray)
+        bg = estimate_background(gray)
 
         assert len(bg) == 1
         assert abs(bg[0] - 180) < 5

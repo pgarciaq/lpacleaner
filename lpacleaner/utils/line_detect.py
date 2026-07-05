@@ -1,6 +1,6 @@
 """Generic ink detection, staff line detection, and foxing filter (R9).
 
-Used by Stages 2 (orientation), 6 (content area), 7 (dewarp), and 8 (deskew).
+Used by Stages 2 (orientation), 6 (content area), 7 (deskew), and 8 (dewarp).
 All thresholds come from Config (populated by the analyze command or defaults).
 """
 

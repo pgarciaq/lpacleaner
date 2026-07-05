@@ -33,6 +33,7 @@ from lpacleaner.utils.geometry import (
     get_perspective_transform,
     order_corners,
 )
+from lpacleaner.utils.image_utils import estimate_background
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class PerspectiveStage(BaseStage):
         )
 
         M = get_perspective_transform(quad, dst)
-        bg_color = _estimate_background(img)
+        bg_color = estimate_background(img)
 
         rectified = cv2.warpPerspective(
             img, M, (width, height),
@@ -115,30 +116,3 @@ def _load_quad(metadata: dict) -> np.ndarray | None:
         logger.warning("Invalid quad_corners shape: %s", arr.shape)
         return None
     return arr
-
-
-def _estimate_background(img: np.ndarray, border_frac: float = 0.05) -> tuple:
-    """Estimate background color from border pixels.
-
-    Samples the outermost *border_frac* (default 5%) of the image on
-    all four sides and returns the per-channel median.  Avoids
-    double-counting the four corner rectangles.
-    """
-    h, w = img.shape[:2]
-    bh = max(1, int(h * border_frac))
-    bw = max(1, int(w * border_frac))
-
-    strips = [
-        img[:bh, :],
-        img[-bh:, :],
-    ]
-    if h > 2 * bh:
-        strips.append(img[bh:-bh, :bw])
-        strips.append(img[bh:-bh, -bw:])
-
-    if img.ndim == 3:
-        pixels = np.concatenate([s.reshape(-1, img.shape[2]) for s in strips])
-        return tuple(int(np.median(pixels[:, c])) for c in range(img.shape[2]))
-
-    pixels = np.concatenate([s.ravel() for s in strips])
-    return (int(np.median(pixels)),)

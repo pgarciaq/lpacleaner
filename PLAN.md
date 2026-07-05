@@ -50,18 +50,19 @@ physical condition (coastal preservation, humidity damage, aging).
 | 11 | Stage 3 (lens correct) | **Done** | 22 tests | Optional; skips when k1=k2=0; `cv2.undistort` with `max(w,h)` focal length |
 | 12 | Stage 4 (page detect) | **Done** | 30 tests | Otsu→inverted Otsu→Canny→adaptive→full-image fallback; ink-aware classification; detect-only (no crop), quad in sidecar |
 | 13 | Stage 5 (perspective) | **Done** | 28 tests | warpPerspective from Stage 4 quad; max-edge sizing; background fill; sidecar propagation |
-| 14 | Stage 6 (content area) | Pending | | |
-| 15 | Stage 8 (deskew) | Pending | | |
-| 16 | Stage 7 (dewarp) | Pending | | |
+| 14 | Stage 6 (content area) | **Done** | 29 tests | Hough border detection→ink density→inset fallback; feathered masking; margin padding; metadata forwarding |
+| 15 | Stage 7 (deskew) | **Done** | 35 tests | Staff-line angle (184) + projection profile (27) + skipped (13); 224/224 on LPA-1 (4m12s); shared image_utils |
+| 16 | Stage 8 (dewarp) | Pending | | |
 | 17 | Stage 9 (enhance) | Pending | | |
 | 18 | Stage 10 (normalize) | Pending | | |
 | 19 | Stage 11 (OCR) | Pending | | |
-| 20 | Stage 12 (PDF assembly) | Pending | | |
-| 21 | Pipeline orchestrator | Pending | | |
-| 22 | CLI polish | Pending | | |
-| 23 | Integration tests | Pending | | |
+| 20 | Stage 12 (PDF assembly) | **Done** | 35 tests | img2pdf; JPEG/PNG compression; case-insensitive; DPI layout; resume; exclude; 224-page LPA-1 PDF (311.9 MB) |
+| 21 | Stage 13 (flipbook export) | Pending | | |
+| 22 | Pipeline orchestrator | Pending | | |
+| 23 | CLI polish | Pending | | |
+| 24 | Integration tests | Pending | | |
 
-**Totals:** 217 tests, all green (196 fast + 21 slow).
+**Totals:** 438 tests, all green.
 
 ---
 
@@ -116,18 +117,20 @@ lpacleaner/
       page_detect.py        # Stage  4: page quad detection with fallback chain (R2)
       perspective.py        # Stage  5: perspective correction from quad corners
       content_area.py       # Stage  6: border frame detection, edge masking
-      dewarp.py             # Stage  7: staff line polynomial mesh or AI dewarping
-      deskew.py             # Stage  8: staff line angle or projection profile
+      deskew.py             # Stage  7: staff line angle or projection profile
+      dewarp.py             # Stage  8: staff line polynomial mesh or AI dewarping
       enhance.py            # Stage  9: R3 color cast, illumination, show-through,
                             #   shadows, stains, halos, salt, CLAHE, denoise, sharpen
       normalize.py          # Stage 10: cross-page color + DPI normalization
       ocr.py                # Stage 11: Tesseract/Kraken OCR
       pdf_assembly.py       # Stage 12: searchable PDF assembly
+      flipbook_export.py    # Stage 13: static HTML flipbook for web publishing
     utils/
       __init__.py
       line_detect.py        # Generic ink detection, staff line detection, foxing filter (R9)
       geometry.py           # Quad ordering, homography, distance helpers
       image_io.py           # EXIF-aware load, save, checkpoint dir management
+      image_utils.py        # Shared: estimate_background(), trim_to_content()
       accel.py              # GPU/OpenCL detection, UMat wrappers, OpenVINO init
       preprocess.py         # Flash hotspot removal (R1), finger detection (R8)
       page_find.py          # Simplified page quad detection (Otsu + largest contour)
@@ -146,12 +149,13 @@ output/
   04_cropped/                IMG_0011.jpg, corners.json, ...
   05_perspective/            IMG_0011.jpg, ...
   06_content/                IMG_0011.jpg, ...   (content area cropped, edges masked)
-  07_dewarped/               IMG_0011.jpg, ...
-  08_deskewed/               IMG_0011.jpg, ...
+  07_deskewed/               IMG_0011.jpg, ...
+  08_dewarped/               IMG_0011.jpg, ...
   09_enhanced/               IMG_0011.jpg, ...
   10_normalized/             IMG_0011.jpg, ...   (cross-page color + DPI matched)
   11_ocr/                    IMG_0011.hocr, ...  (hOCR XML files)
-  output.pdf                                     (final searchable PDF)
+  12_pdf/                    output.pdf, output.pdf.json
+  13_flipbook/               index.html, pages/, page-flip.browser.js
   pipeline.json                                  (stage status, parameters used)
   lpacleaner.log                                 (detailed log, always verbose)
 ```
@@ -285,7 +289,7 @@ Total cost for 5 images: ~1 second.
 The ±15° tolerance in HoughLinesP handles real-world camera wobble.
 Even a photo taken at 87° (3° off from 90°) has its staff lines brought
 to ~3° from horizontal by the 90° rotation -- well within the detection
-window. Fine-angle correction (the remaining 2-3°) is Stage 8's job.
+window. Fine-angle correction (the remaining 2-3°) is Stage 7's job.
 
 ### Algorithm
 
@@ -903,33 +907,48 @@ error_class = "skippable"
 
 ---
 
-## Stage 6: Content Area Detection (`content_area.py`)
+## Stage 6: Content Area Detection (`content_area.py`) ✅
 
 Detects the border frame that surrounds content on most pages, providing
 a tighter crop than the page edge, and masks residual adjacent page edges.
 
-### Algorithm
+### Algorithm (implemented)
 
 ```
-1. Detect border frame:
-   a. Isolate ink mask (line_detect.py detect_ink_mask)
-   b. Morphological close with 5x5 kernel
+1. Detect border frame (when has_border_frame is True):
+   a. Isolate ink mask via detect_ink_mask (line_detect.py)
+   b. Morphological close with 5x5 kernel to join fragments
    c. HoughLinesP: find long horizontal and vertical ink-colored lines
-   d. Filter: horizontals near top/bottom, verticals near left/right
+      (min length = 25% of min dimension, threshold=80, maxGap=30)
+   d. Filter: horizontals within top/bottom 35%, verticals within left/right 35%
    e. Intersect 4 border lines to find content rectangle
-   f. Fallback if cfg.has_border_frame is False or < 4 lines found:
-      ink-density bounding box with padding, or fixed 5% inset
+   f. Fallback cascade:
+      1. Ink density bounding box (bounding rect of dilated ink mask + 2% pad)
+      2. Fixed inset (default 5% from all edges)
 
 2. Mask adjacent page edges:
-   a. Detect sharp vertical luminance transitions outside content rect
-   b. Fill outside content rect with median background color
-      (Gaussian feathering, sigma=20px)
+   a. Build alpha mask: 1.0 inside content rect, 0.0 outside
+   b. Gaussian blur alpha (sigma=20px) for feathered transition
+   c. Blend: result = img * alpha + bg_color * (1 - alpha)
 
-3. Add uniform margins:
+3. Crop and add uniform margins:
    a. Crop to content rectangle
    b. Add padding (default 2% of width) filled with background color
 
-4. Store content rectangle in metadata
+4. Special cases:
+   a. Blank pages (from Stage 4/5 metadata): pass through unchanged
+   b. Content rect < 10% of image area: fall back to inset
+
+5. Store content_rect, method, margin_px, background_color in metadata
+```
+
+### Stage attributes
+
+```python
+name = "content_area"
+number = 6
+checkpoint_name = "06_content"
+error_class = "skippable"
 ```
 
 ### Parameters
@@ -942,12 +961,62 @@ content_feather_sigma: int = 20
 
 ### Input/Output
 
-- Input: perspective-corrected image from `05_perspective/`
-- Output: content-cropped image in `06_content/`
+- Input: perspective-corrected image from `05_perspective/` + sidecar metadata
+- Output: content-cropped image with margins in `06_content/`
+- Metadata sidecar: stage, method, content_rect, margin_px, background_color, page_type
 
 ---
 
-## Stage 7: Dewarping (`dewarp.py`)
+## Stage 7: Deskew (`deskew.py`)
+
+### Algorithm
+
+```
+1. Detect staff lines (line_detect.py with geometric filter)
+2. If lines found: skew_angle = median angle of line segments
+3. If no lines (text-only pages):
+   a. Binary threshold (Otsu)
+   b. Projection profile with coarse-to-fine search:
+      - Coarse: test every 1.0 degree in [-max_angle, +max_angle]
+      - Fine: refine ±1 degree around best in 0.1 steps
+      - Score = variance of row sums. Best = max variance.
+      - Image downscaled to 25% before computing row sums
+        (accuracy is preserved, ~6x speedup).
+4. Clamp angle: if |skew_angle| > deskew_max_angle, clamp and
+   log WARNING (may indicate Stage 2 orientation failure).
+5. Skip rotation if |skew_angle| < deskew_skip_threshold (0.1 deg).
+6. Estimate background color: shared estimate_background() utility
+   (median of border pixels, outermost 5%).
+7. Rotate by -skew_angle via cv2.warpAffine with
+   borderMode=cv2.BORDER_CONSTANT, borderValue=bg_color.
+8. Post-geometry trim (shared trim_to_content() utility):
+   a. Threshold: pixels significantly different from bg_color
+   b. Find bounding rect of non-background region
+   c. Crop to the content bounding box
+   d. Add uniform margin padding (default 2% of width) filled with
+      bg_color
+   Note: Stage 8 (dewarp) also calls trim_to_content() at its end.
+   Running it in both stages handles all skip combinations and the
+   overhead is negligible (~5ms per image).
+9. Forward page_type from input metadata.
+```
+
+### Parameters
+
+```python
+deskew_max_angle: float = 5.0
+deskew_angle_step: float = 0.1
+deskew_skip_threshold: float = 0.1
+```
+
+### Input/Output
+
+- Input: image from `06_content/`
+- Output: deskewed image in `07_deskewed/`
+
+---
+
+## Stage 8: Dewarping (`dewarp.py`)
 
 Two paths: classical (default) and AI (optional).
 
@@ -976,15 +1045,18 @@ Two paths: classical (default) and AI (optional).
    b. Interpolate dy across full image height
    c. map_x[y,x] = x, map_y[y,x] = y - dy_interpolated[y,x]
 
-4. Estimate background color: median of border pixels (outermost 5%)
+4. Estimate background color: shared estimate_background() utility.
 5. Apply: cv2.remap(img, map_x, map_y, INTER_CUBIC,
        borderMode=cv2.BORDER_CONSTANT, borderValue=bg_color)
    (Use UMat for GPU -- 1.5x speedup)
 
-5. Pages with < 2 detected staff lines:
+6. Pages with < 2 detected staff lines:
    - Flag in metadata
    - If --ai-dewarp: use AI path
    - Otherwise: pass through unchanged
+
+7. Post-geometry trim: shared trim_to_content() utility
+   (same as Stage 7 -- cleans up background artifacts from remap).
 ```
 
 ### AI Path: DocTr GeoTr (Optional, `--ai-dewarp`)
@@ -1010,51 +1082,9 @@ dewarp_morph_kernel: tuple = (1, 20)
 
 ### Input/Output
 
-- Input: image from `06_content/`
-- Output: dewarped image in `07_dewarped/`
+- Input: deskewed image from `07_deskewed/`
+- Output: dewarped image in `08_dewarped/`
 - Metadata: staff positions, polynomial coefficients, method used
-
----
-
-## Stage 8: Deskew (`deskew.py`)
-
-### Algorithm
-
-```
-1. Detect staff lines (line_detect.py with geometric filter)
-2. If lines found: skew_angle = median angle of line segments
-3. If no lines (text-only pages):
-   a. Binary threshold (Otsu)
-   b. Projection profile: for angles in [-5, +5] step 0.1,
-      score = variance of row sums. Best = max variance.
-4. Estimate background color: median of border pixels (outermost 5%)
-5. Rotate by -skew_angle via cv2.warpAffine with
-   borderMode=cv2.BORDER_CONSTANT, borderValue=bg_color
-6. Skip rotation if |skew_angle| < 0.1 degrees
-
-7. Post-geometry trim (runs even if rotation was skipped):
-   a. The geometric transforms in Stages 5, 7, 8 may have shifted
-      content boundaries. Re-detect the actual content bounding box:
-      - Threshold: pixels significantly different from bg_color
-      - Find bounding rect of non-background region
-   b. Crop to the content bounding box
-   c. Add uniform margin padding (default 2% of width) filled with
-      bg_color
-   d. This produces the cleanest possible input for enhancement
-```
-
-### Parameters
-
-```python
-deskew_max_angle: float = 5.0
-deskew_angle_step: float = 0.1
-deskew_skip_threshold: float = 0.1
-```
-
-### Input/Output
-
-- Input: dewarped image from `07_dewarped/`
-- Output: deskewed image in `08_deskewed/`
 
 ---
 
@@ -1178,7 +1208,7 @@ enhance_binarize_c: int = 15
 
 ### Input/Output
 
-- Input: deskewed image from `08_deskewed/`
+- Input: dewarped image from `08_dewarped/`
 - Output: enhanced image in `09_enhanced/`
 
 ### Future: Parchment Recto/Verso Handling (GitHub #2)
@@ -1241,7 +1271,7 @@ normalize_bg_sample_percentile: float = 0.8
 1. Blank page detection: skip if grayscale stddev < 15
 
 2. Notation masking (see K5):
-   a. Load staff line positions from Stage 7 metadata
+   a. Load staff line positions from Stage 8 metadata
    b. For each staff group: mask the region from top staff line - margin
       to bottom staff line + margin with white
    c. This leaves only inter-staff text lines visible to Tesseract
@@ -1273,55 +1303,170 @@ ocr_blank_stddev_threshold: float = 15
 
 ## Stage 12: PDF Assembly (`pdf_assembly.py`)
 
-### Algorithm
+### Algorithm (implemented)
 
 ```
-1. Determine page order (see K6):
-   a. If page numbers extracted in Stage 11: order by page number
-   b. If page_order specified in book.toml: use manual order
-   c. Fallback: filename order
-   d. Exclude images listed in book.toml [page_overrides] exclude
+1. Resolve input: find the latest completed stage checkpoint directory.
+   The CLI's _find_previous_checkpoint walks backward from stage 12.
 
-2. Detect and handle spreads (see K7):
-   a. If spread detected in Stage 4: both halves included as separate pages
+2. Collect images from input directory (sorted by filename = page order).
+   Exclude images listed in cfg.exclude_images.
 
 3. Image compression for PDF:
-   a. Input images are PNG (lossless checkpoints from Stage 10)
-   b. pdf_compression = "jpeg" (default): encode as JPEG quality 90
-      inside the PDF. This is the ONLY lossy step in the entire
-      pipeline. One compression pass = negligible quality loss.
-      Result: ~200MB for 225 pages.
-   c. pdf_compression = "lossless": embed as PNG/Deflate inside PDF.
-      Perfect quality, but ~8GB for 225 pages.
-   d. pdf_compression = "jpeg2000": JPEG 2000 at configurable quality.
-      Better quality/size ratio than JPEG, but slower and not
-      universally supported by PDF viewers.
-   e. Set DPI from EXIF metadata (stored in pipeline.json) or from
-      normalize target DPI (default 300)
+   a. pdf_compression = "jpeg" (default): convert each PNG to JPEG in
+      memory at cfg.pdf_jpeg_quality (default 90) using cv2.imencode.
+      This is the ONLY lossy step in the entire pipeline.
+      One compression pass = negligible quality loss.
+      Result: ~312 MB for 224 pages at quality 90.
+   b. pdf_compression = "png": pass PNG bytes directly to img2pdf.
+      Perfect quality, larger file size.
+   c. Compression mode is case-insensitive ("JPEG", "jpeg", "PNG", etc.).
 
-4. With OCR: ocrmypdf.ocr(images, output.pdf, language=cfg.ocr_lang)
-5. Without OCR: img2pdf.convert(images)
-6. Page sizing: uniform size based on median aspect ratio
+4. Assembly: img2pdf.convert() with custom layout function setting
+   page dimensions from image pixel dimensions and cfg.pdf_dpi (default 300).
+
+5. Atomic write: output.pdf.tmp → output.pdf via os.replace().
+
+6. Write metadata sidecar (output.pdf.json) with page count, compression,
+   quality, DPI, file size, and input directory.
+
+7. Resume: if output.pdf exists and stage is marked done in PipelineState,
+   skip entirely. PDF assembly is all-or-nothing (no partial resume).
 ```
 
 ### Parameters
 
 ```python
-pdf_compression: str = "jpeg"      # "jpeg", "lossless", "jpeg2000"
+pdf_compression: str = "jpeg"      # "jpeg" or "png" (case-insensitive)
 pdf_jpeg_quality: int = 90
-pdf_dpi: int = 300                 # fallback if not in EXIF/metadata
+pdf_dpi: int = 300
+```
+
+### TOML configuration
+
+```toml
+[pdf]
+compression = "jpeg"   # or "png"
+jpeg_quality = 90
+dpi = 300
 ```
 
 ### Input/Output
 
-- Input: normalized PNG images + hOCR files + EXIF metadata
-- Output: `output.pdf`
+- Input: images from latest completed stage checkpoint
+- Output: `output.pdf` + `output.pdf.json` sidecar
+
+### Future enhancements (deferred)
+
+- OCR layer via ocrmypdf (depends on Stage 11)
+- JPEG 2000 compression mode
+- Page reordering (OCR-based or manual via book.toml)
+- Spread detection/splitting (K7)
+
+---
+
+## Stage 13: Flipbook Export (`flipbook_export.py`)
+
+Generates a self-contained static HTML flipbook from the processed images,
+suitable for publishing on a website. The output is a directory that can be
+uploaded to any static hosting (GitHub Pages, Netlify, a parish website, etc.)
+without server-side dependencies.
+
+### Algorithm
+
+```
+1. Resolve input: find the latest completed image stage checkpoint
+   (same logic as Stage 12 -- walk backward from stage 13).
+
+2. Collect images (sorted by filename = page order).
+   Exclude images from cfg.exclude_images.
+
+3. Downscale images for web:
+   a. flipbook_max_width (default 1600px): resize if wider, preserving
+      aspect ratio.
+   b. Export as JPEG at flipbook_jpeg_quality (default 85) into
+      output_dir/pages/.
+   c. Optionally generate thumbnail versions for lazy loading.
+
+4. Generate index.html with embedded StPageFlip viewer:
+   a. Bundle page-flip.browser.js (vendored, MIT license, ~50 KB).
+   b. loadFromImages() with the page JPEG paths.
+   c. Responsive layout: size="stretch", showCover=true.
+   d. Touch/swipe support for mobile.
+   e. Keyboard navigation (arrow keys, Home/End).
+   f. Page number indicator.
+
+5. Write metadata sidecar (flipbook.json) with page count, dimensions,
+   total size, and generation timestamp.
+```
+
+### Parameters
+
+```python
+flipbook_max_width: int = 1600       # max page width in pixels for web
+flipbook_jpeg_quality: int = 85      # JPEG quality for web images
+flipbook_title: str = ""             # title shown in the viewer
+```
+
+### TOML configuration
+
+```toml
+[flipbook]
+max_width = 1600
+jpeg_quality = 85
+title = "LPA 1 - San Nicolás"
+```
+
+### Input/Output
+
+- Input: images from latest completed image stage checkpoint
+- Output: `flipbook/` directory containing:
+  - `index.html` (self-contained viewer)
+  - `pages/` (resized JPEG images)
+  - `page-flip.browser.js` (vendored library)
+  - `flipbook.json` (sidecar metadata)
+
+### Library choice: StPageFlip (`page-flip`)
+
+- **MIT license**, zero dependencies, ~50 KB bundled
+- Realistic 3D page-turning physics with canvas rendering
+- Works on desktop and mobile (touch/swipe)
+- Portrait and landscape support
+- `loadFromImages()` API fits our use case perfectly
+- React wrapper available (`react-pageflip`) if needed later
+- The most actively used open-source flipbook library as of 2026
+  (64K+ weekly npm downloads)
+
+### Alternatives considered
+
+| Library | Notes |
+|---------|-------|
+| Turn.js | jQuery dependency, commercial license for v4+ |
+| Flipbook.js | Less maintained, smaller community |
+| pdf.js + StPageFlip | Could render PDF directly, but pre-rendered images are faster and simpler |
+| Zaya | Commercial with free tier; not fully open source |
+
+### CLI integration
+
+```bash
+lpacleaner flipbook INPUT_DIR -o OUTPUT_DIR    # standalone command
+lpacleaner run INPUT_DIR --stages 0-6,13       # or as part of pipeline
+```
+
+### Design notes
+
+- Like Stage 12, this stage subclasses `BaseStage` but overrides `run()`
+  entirely (batch output, not per-image checkpoints).
+- The `page-flip.browser.js` file is vendored into the package to avoid
+  requiring npm/node at runtime. Updated periodically.
+- The generated flipbook is fully static -- no server, no build step, no
+  Node.js required to view it. Just open `index.html` in a browser.
 
 ---
 
 ## Stage Contract (`pipeline.py`)
 
-All 13 stages share the same lifecycle via `BaseStage`:
+All 14 stages share the same lifecycle via `BaseStage`:
 
 ```python
 class BaseStage(ABC):
@@ -1365,11 +1510,11 @@ Persisted state for resume, cache invalidation, and end-of-run reporting:
   "config_source": "analyzed",
   "config_hashes": {
     "stage_2": "a1b2c3...",
-    "stage_7": "d4e5f6..."
+    "stage_8": "d4e5f6..."
   },
   "done": {
     "02_oriented": ["IMG_0001", "IMG_0002", ...],
-    "07_dewarped": ["IMG_0001"]
+    "08_dewarped": ["IMG_0001"]
   },
   "results": {
     "orientation": {"processed": 220, "skipped": 0, "failed": 3, "excluded": 2}
@@ -1402,19 +1547,14 @@ STAGE_ORDER = [
     PageDetectStage(),     # 4: page quad detection
     PerspectiveStage(),    # 5: perspective correction
     ContentAreaStage(),    # 6: border detection + crop
-    DeSkewStage(),         # 8: staff line angle or projection profile
-    DewarpStage(),         # 7: polynomial mesh or AI dewarping
+    DeSkewStage(),         # 7: staff line angle or projection profile
+    DewarpStage(),         # 8: polynomial mesh or AI dewarping
     EnhanceStage(),        # 9: color correction, denoising, sharpening
     NormalizeStage(),      # 10: cross-page color + DPI
     OCRStage(),            # 11: Tesseract/Kraken OCR
     PDFAssemblyStage(),    # 12: final PDF output
 ]
 ```
-
-Note: Stage 8 (deskew) runs before Stage 7 (dewarp) in the implementation
-because deskew validates the staff line detection pipeline that dewarp
-depends on. The stage numbers reflect their logical function, not execution
-order.
 
 ### Orchestration Logic
 
@@ -1471,7 +1611,7 @@ If `--verbose`: per-image timing and parameter values.
 ### line_detect.py
 
 Generic ink color detection with foxing discrimination. Used by Stages 2
-(orientation), 6 (content area), 7 (dewarp), and 8 (deskew).
+(orientation), 6 (content area), 7 (deskew), and 8 (dewarp).
 
 ```python
 def detect_ink_mask(img: np.ndarray, cfg: Config) -> np.ndarray:
@@ -1508,6 +1648,37 @@ def detect_illustration_regions(img, cfg) -> np.ndarray:
 def order_corners(pts) -> np.ndarray: ...
 def compute_target_size(corners) -> tuple[int, int]: ...
 def get_perspective_transform(src, dst) -> np.ndarray: ...
+```
+
+### image_utils.py
+
+Shared image utilities used by multiple geometric stages (7, 8) and
+potentially other stages that need background estimation or content trim.
+
+```python
+def estimate_background(img: np.ndarray, border_frac: float = 0.05) -> tuple[int, int, int]:
+    """Estimate background color from border pixels (outermost border_frac).
+
+    Returns BGR color as a 3-tuple. Uses median of border pixel values
+    for robustness against content near the edges.
+    Used by: Stage 5 (perspective), Stage 7 (deskew), Stage 8 (dewarp).
+    """
+
+def trim_to_content(
+    img: np.ndarray,
+    bg_color: tuple[int, int, int] | None = None,
+    margin_frac: float = 0.02,
+    threshold: int = 30,
+) -> np.ndarray:
+    """Trim background-colored borders and add uniform margin padding.
+
+    1. Estimate bg_color if not provided (via estimate_background).
+    2. Threshold: pixels with L1 distance > threshold from bg_color.
+    3. Find bounding rect of non-background region.
+    4. Crop to bounding rect.
+    5. Add uniform margin (margin_frac * width) filled with bg_color.
+    Used by: Stage 7 (deskew), Stage 8 (dewarp).
+    """
 ```
 
 ### image_io.py
@@ -1573,8 +1744,8 @@ Each stage is classified as mandatory, auto-conditional, or optional:
 | 4 | Page detect | **mandatory** | on | Always runs (everything downstream needs it) |
 | 5 | Perspective | **mandatory** | on | Always runs (produces rectangle) |
 | 6 | Content area | optional | on | `skip_content_area = true` in book.toml |
-| 7 | Dewarp | optional | on | `skip_dewarp = true` or no staff lines + no AI |
-| 8 | Deskew | optional | on | `skip_deskew = true` or angle < 0.1 degrees |
+| 7 | Deskew | optional | on | `skip_deskew = true` or angle < 0.1 degrees |
+| 8 | Dewarp | optional | on | `skip_dewarp = true` or no staff lines + no AI |
 | 9 | Enhance | optional | on | `skip_enhance = true` (sub-steps also toggleable) |
 | 10 | Normalize | optional | on | `skip_normalize = true` |
 | 11 | OCR | optional | on | `--no-ocr` flag or `skip_ocr = true` |
@@ -1729,7 +1900,7 @@ Each stage computes per-image confidence metrics. The pipeline aggregates
 these into stage-level statistics in the end-of-run report:
 
 ```
-Stage  7 (dewarp): 210/225 OK, 12 soft fallback (< 2 staff lines), 3 AI fallback
+Stage  8 (dewarp): 210/225 OK, 12 soft fallback (< 2 staff lines), 3 AI fallback
 Stage  9 (enhance): 222/225 OK, 3 flagged (high noise residual)
 ```
 
@@ -1850,8 +2021,8 @@ when a hard failure occurs:
 | 4 | Page detect | critical | **Exclude image** from pipeline |
 | 5 | Perspective | critical | **Exclude image** from pipeline |
 | 6 | Content area | skippable | Pass through with fixed 5% inset |
-| 7 | Dewarp | skippable | Pass through undistorted image |
-| 8 | Deskew | skippable | Pass through unskewed image |
+| 7 | Deskew | skippable | Pass through unskewed image |
+| 8 | Dewarp | skippable | Pass through undistorted image |
 | 9 | Enhance | skippable | Pass through unenhanced image |
 | 10 | Normalize | skippable | Pass through unnormalized image |
 | 11 | OCR | skippable | No text layer for this page |
@@ -1879,7 +2050,7 @@ Per-stage override in book.toml for edge cases:
 ```toml
 [error_overrides]
 stage_5 = "skippable"   # don't exclude images that fail perspective
-stage_7 = "critical"    # I want perfect dewarping or nothing
+stage_8 = "critical"    # I want perfect dewarping or nothing
 ```
 
 ### End-of-Run Report
@@ -1962,16 +2133,16 @@ Console (default):
 ```
 [Stage 2] Orienting images... 225/225 [00:12, 18.7 img/s]
 [Stage 2]   3 images flagged: IMG_0080 (low focus: 45.2)
-[Stage 7] Dewarping images... 222/222 [01:45, 2.1 img/s]
-[Stage 7]   210 dewarped (staff lines), 12 passthrough (text pages)
-[Stage 7]   ERROR: IMG_0080.JPG skipped (ValueError in polynomial fit)
+[Stage 8] Dewarping images... 222/222 [01:45, 2.1 img/s]
+[Stage 8]   210 dewarped (staff lines), 12 passthrough (text pages)
+[Stage 8]   ERROR: IMG_0080.JPG skipped (ValueError in polynomial fit)
 ```
 
 Console (verbose):
 ```
-[Stage 7] IMG_0011.JPG: 14 staff lines, poly R²=0.997, 0.42s
-[Stage 7] IMG_0012.JPG: 16 staff lines, poly R²=0.999, 0.38s
-[Stage 7] IMG_0013.JPG: 0 staff lines, passthrough (text page), 0.02s
+[Stage 8] IMG_0011.JPG: 14 staff lines, poly R²=0.997, 0.42s
+[Stage 8] IMG_0012.JPG: 16 staff lines, poly R²=0.999, 0.38s
+[Stage 8] IMG_0013.JPG: 0 staff lines, passthrough (text page), 0.02s
 ```
 
 Log file (always):
@@ -1979,7 +2150,7 @@ Log file (always):
 2026-07-04 04:30:12.345 INFO  stage=2 image=IMG_0011.JPG action=oriented method=exif+staff_lines angle=0 focus=342.5 elapsed_ms=55
 2026-07-04 04:30:12.400 INFO  stage=2 image=IMG_0012.JPG action=oriented method=exif+staff_lines angle=90 focus=287.3 elapsed_ms=62
 2026-07-04 04:30:15.123 WARN  stage=2 image=IMG_0080.JPG action=flagged reason=low_focus focus=45.2 threshold=100
-2026-07-04 04:32:45.678 ERROR stage=7 image=IMG_0080.JPG action=failed error="ValueError: polynomial fit singular matrix" traceback="..."
+2026-07-04 04:32:45.678 ERROR stage=8 image=IMG_0080.JPG action=failed error="ValueError: polynomial fit singular matrix" traceback="..."
 ```
 
 ### Per-Stage Summary
@@ -1987,7 +2158,7 @@ Log file (always):
 After each stage completes, a summary line is logged at INFO level:
 
 ```
-[Stage 7] Complete: 210/222 dewarped, 12 passthrough, 0 failed. Total: 1m45s
+[Stage 8] Complete: 210/222 dewarped, 12 passthrough, 0 failed. Total: 1m45s
 ```
 
 This is also written to `pipeline.json` for programmatic access.
@@ -2027,9 +2198,9 @@ deep learning. Every stage uses deterministic, interpretable algorithms:
 | Hough Line Transform | Stages 2, 6, 7, 8 | Staff line and border detection |
 | HSV color filtering | line_detect.py | Ink color isolation |
 | Morphological operations | Multiple stages | Mask cleaning, gap bridging |
-| Polynomial fitting | Stage 7 | Staff line curvature modeling |
+| Polynomial fitting | Stage 8 | Staff line curvature modeling |
 | Perspective transform | Stage 5 | Geometric correction |
-| cv2.remap | Stage 7 | Dewarping via displacement mesh |
+| cv2.remap | Stage 8 | Dewarping via displacement mesh |
 | CLAHE | Stage 9 | Adaptive contrast enhancement |
 | ORB feature matching | Stage 1 | Stitch group detection |
 | cv2.Stitcher | Stage 1 | Panoramic stitching (ORB-based, not neural) |
@@ -2058,7 +2229,7 @@ deep learning. Every stage uses deterministic, interpretable algorithms:
 
 Only one place, only when explicitly requested:
 
-- **Stage 7 dewarp, AI path** (`--ai-dewarp`): DocTr GeoTr model,
+- **Stage 8 dewarp, AI path** (`--ai-dewarp`): DocTr GeoTr model,
   converted to OpenVINO IR (FP16), runs on Intel Arc GPU. Used as
   fallback when classical dewarping finds fewer than 2 staff lines
   (text-only pages, decorative pages). Requires `openvino` and
@@ -2120,12 +2291,12 @@ OMR-friendly:
 
 1. **Lossless checkpoints (PNG)**: OMR needs clean pixel data, not
    JPEG-compressed artifacts around note heads.
-2. **Staff line detection metadata**: Stage 7 stores staff positions,
+2. **Staff line detection metadata**: Stage 8 stores staff positions,
    polynomial coefficients, and cluster assignments. OMR needs exactly
    this data to locate staves.
 3. **Page type classification**: Stage 4 classifies pages as "music",
    "text", "decorative", etc. OMR only processes "music" pages.
-4. **Dewarped staff lines**: After Stage 7, staff lines are straight
+4. **Dewarped staff lines**: After Stage 8, staff lines are straight
    and horizontal -- the ideal input for OMR symbol detection.
 5. **Notation masking** (Stage 11): The OCR stage already masks staff
    regions. The inverse mask (notation regions only) is exactly what
@@ -2205,9 +2376,9 @@ GABC output. This is a standalone research/engineering project.
 Fallback if end-to-end proves too complex:
 
 ```
-Input: dewarped images from Stage 7 + staff line metadata
+Input: dewarped images from Stage 8 + staff line metadata
 
-1. Staff line removal: use Stage 7 staff positions to precisely
+1. Staff line removal: use Stage 8 staff positions to precisely
    remove staff lines, leaving only notes, clefs, accidentals, text
 2. Symbol segmentation: connected components or neural detection
    (YOLO-based or similar) to isolate individual symbols
@@ -2235,8 +2406,8 @@ and doesn't require as much training data.
 
 No changes needed to the current pipeline for OMR readiness. The
 architecture is already compatible:
-- OMR would be a new Stage 13 (or a separate command `lpacleaner omr`)
-- It consumes Stage 7 output (dewarped images) and Stage 7 metadata
+- OMR would be a new Stage 14 (or a separate command `lpacleaner omr`)
+- It consumes Stage 8 output (dewarped images) and Stage 8 metadata
   (staff positions)
 - It runs after the image pipeline, optionally in parallel with
   enhancement/OCR
@@ -2287,8 +2458,8 @@ Config-aware invalidation:
     Stage 4:  [page_detect_*]
     Stage 5:  (none -- only depends on Stage 4 corners)
     Stage 6:  [content_*, staff_color_*, has_border_frame]
-    Stage 7:  [dewarp_*, staff_color_*, ai_dewarp]
-    Stage 8:  [deskew_*, staff_color_*]
+    Stage 7:  [deskew_*, staff_color_*]
+    Stage 8:  [dewarp_*, staff_color_*, ai_dewarp]
     Stage 9:  [enhance_*, color_cast_*, shadow_*, stain_*, halo_*, salt_*]
     Stage 10: [normalize_*]
     Stage 11: [ocr_*]
@@ -2463,7 +2634,7 @@ PDF is reviewed.
    given stage (e.g., `--stage 09_enhanced`), so the user can visually
    scan all 225 pages at once and spot problems.
 4. **Stage-level summary stats**: After each stage completes, log summary
-   statistics:    "Stage 7: 210/225 pages dewarped (93%), 12 passed through
+   statistics:    "Stage 8: 210/225 pages dewarped (93%), 12 passed through
    (no lines), 3 used AI fallback."
 
 ### K4. Text-Only and Special Pages
@@ -2498,7 +2669,7 @@ nonsense for the notation areas, polluting the searchable text layer.
 **Mitigations**:
 
 1. **Notation masking before OCR**: Detect staff line regions (using the
-   same line_detect.py output from Stage 7) and mask them with white
+   same line_detect.py output from Stage 8) and mask them with white
    before feeding to Tesseract. This leaves only text lines visible to OCR.
 2. **Text region extraction**: Use horizontal projection profiles to find
    text lines between staves. These inter-staff text bands are the only
@@ -2607,6 +2778,41 @@ visible seams, ghosting, or misalignment.
 5. **Visual QA**: The `review` command includes stitched results with
    overlay lines showing the seam positions, so the user can spot
    misalignment.
+
+### K10. Incomplete Page Coverage (Cut Corners)
+
+**Risk**: Many photographs do not capture the full page -- one or two
+corners are outside the camera frame. This is common when photographing
+thick bound books where the photographer cannot frame the page perfectly.
+The missing corners affect multiple stages differently.
+
+**Impact per stage**:
+
+| Stage | Impact | Severity |
+|-------|--------|----------|
+| 4 (page detect) | Quad can't find real corners, falls back to full-image quad | Low |
+| 5 (perspective) | Full-image fallback = near-identity warp, so minimal distortion | Low |
+| 6 (content area) | Border detection may fail on cut side; ink-density fallback works; feathering hides the cut edge | Low |
+| 7 (deskew) | Rotation shifts the cut corner, background fill makes it visible; `trim_to_content()` cleans up | Medium |
+| 8 (dewarp) | Staff lines near the cut corner are shorter/missing, weakening polynomial fit on that side | Medium |
+
+**Mitigations** (most already in place):
+
+1. **Full-image quad fallback** (Stage 4): When the quad detection fails to
+   find 4 real corners, it returns the full image bounds. This prevents
+   incorrect perspective correction in Stage 5.
+2. **`page_detect_expand_frac`** (Stage 4): Expands the detected quad
+   outward by a fraction, reducing the chance of cropping at the edge.
+3. **Feathered edge masking** (Stage 6): Gaussian feathering at image
+   edges fades out the cut-corner region instead of creating a hard edge.
+4. **Background fill** (Stages 5, 7, 8): All geometric transforms use
+   `borderMode=BORDER_CONSTANT` with the estimated background color.
+   Cut corners are filled with a plausible color rather than black.
+5. **`trim_to_content()`** (Stages 7, 8): Post-geometry trim crops the
+   background-filled artifacts from cut corners after rotation/dewarp.
+6. **This is fundamentally a photography limitation**: The pipeline
+   cannot recover content that was never captured. The mitigations make
+   the result look clean, but the missing corner content is gone.
 
 ---
 
@@ -2927,14 +3133,15 @@ on synthetic images:
 12. ~~**Stage 3** (lens correct, optional)~~: ✅ radial distortion correction (R7) via `cv2.undistort`, auto-skip when k1=k2=0, `max(w,h)` focal length (22 tests)
 13. ~~**Stage 4** (page detect)~~: ✅ Otsu→inverted Otsu→Canny→adaptive→full-image cascade, quad refinement with escalating epsilon, ink-aware page classification, bounding-box crop (27 tests)
 14. ~~**Stage 5** (perspective)~~: ✅ warpPerspective from Stage 4 quad, max-edge sizing, background fill (not black), sidecar propagation via BaseStage.run() (28 tests)
-15. **Stage 6** (content area): border detection, edge masking, margins
-16. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim
-17. **Stage 7** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
+15. ~~**Stage 6** (content area)~~: ✅ Hough border detection→ink density→inset fallback; feathered masking; margin padding; sidecar forwarding (29 tests)
+16. **Stage 7** (deskew): staff angle or projection profile, post-geometry trim
+17. **Stage 8** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
 18. **Stage 9** (enhance): R3 color cast, illumination, shadows (R5), stains (R6), halos (R10), show-through, CLAHE, salt (R11), denoise, sharpen
 19. **Stage 10** (normalize): cross-page color + DPI (global pass, batch stage)
 20. **Stage 11** (OCR): Tesseract integration, graceful skip if missing, Kraken optional
-21. **Stage 12** (PDF): ocrmypdf / img2pdf assembly, configurable compression (batch stage)
-22. **pipeline.py**: orchestrator -- chain stages, progress reporting, end-of-run summary
-23. **CLI polish**: tqdm progress bars, `inspect` + `review` commands, error handling UX
-24. **Integration tests**: full-pipeline tests, CLI tests, output validation
-25. **Performance**: memory optimization (GitHub #1), parallelism tuning
+21. ~~**Stage 12** (PDF)~~: ✅ img2pdf assembly, JPEG/PNG compression, case-insensitive config, DPI layout, resume, exclude (35 tests)
+22. **Stage 13** (flipbook): static HTML flipbook export with StPageFlip, web-optimized images (batch stage)
+23. **pipeline.py**: orchestrator -- chain stages, progress reporting, end-of-run summary
+24. **CLI polish**: tqdm progress bars, `inspect` + `review` commands, error handling UX
+25. **Integration tests**: full-pipeline tests, CLI tests, output validation
+26. **Performance**: memory optimization (GitHub #1), parallelism tuning
