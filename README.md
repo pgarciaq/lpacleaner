@@ -99,6 +99,32 @@ ghh publish /path/to/output /var/www/mybook
 ghh cleanup /path/to/output
 ```
 
+### Compare & Publish
+
+After processing, `ghh compare` generates an interactive HTML viewer that lets you flip through every image across all pipeline stages. It's automatically created at the end of every `ghh run`.
+
+```bash
+# Open the full-book comparison viewer (auto-generated after run):
+ghh compare /path/to/output
+
+# Start at a specific image:
+ghh compare /path/to/output IMG_0050
+```
+
+Keyboard shortcuts: **PgUp/PgDn** = prev/next image, **Left/Right** = prev/next stage, **S** = side-by-side, **M** = metadata panel, **Z** = zoom.
+
+To share results with collaborators, `ghh publish` creates a self-contained directory with downscaled JPEGs suitable for any static web host:
+
+```bash
+# Publish all stages (1500px max, quality 85):
+ghh publish /path/to/output /var/www/mybook
+
+# Publish specific stages at a smaller size:
+ghh publish /path/to/output ./pub --stages "0,5,7" --max-dim 1000
+```
+
+The two viewers have distinct color themes (blue for local compare, amber for published) so you can tell at a glance which one you're looking at.
+
 ## Pipeline Stages
 
 | Stage | Name | Description |
