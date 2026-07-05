@@ -52,12 +52,9 @@ def _find_source_images(output_dir: Path) -> list[Path]:
 
 
 def _find_pdf(output_dir: Path) -> Path | None:
-    """Find the PDF in 12_pdf/ checkpoint."""
-    pdf_dir = output_dir / "12_pdf"
-    if not pdf_dir.is_dir():
-        return None
-    for f in pdf_dir.iterdir():
-        if f.suffix.lower() == ".pdf":
+    """Find the PDF in the output directory (produced by Stage 12)."""
+    for f in output_dir.iterdir():
+        if f.is_file() and f.suffix.lower() == ".pdf":
             return f
     return None
 
@@ -91,6 +88,7 @@ def generate_flipbook(
     jpeg_quality: int = 85,
     title: str = "",
     include_pdf: bool = True,
+    show_cover: bool = False,
 ) -> Path:
     """Generate a flipbook from pipeline output.
 
@@ -101,6 +99,9 @@ def generate_flipbook(
         jpeg_quality: JPEG compression quality (1-100).
         title: Title displayed in the viewer.
         include_pdf: Whether to include a PDF download link.
+        show_cover: If True, the first image is treated as a standalone cover
+            (displayed alone on the right before flipping). If False (default),
+            page 1 starts on the left as a normal interior page.
 
     Returns:
         Path to the generated index.html.
@@ -154,6 +155,7 @@ def generate_flipbook(
         pdf_filename=pdf_filename,
         page_width=page_w,
         page_height=page_h,
+        show_cover=show_cover,
     )
 
     index_path = flipbook_dir / "index.html"
@@ -188,6 +190,7 @@ def _render_html(
     pdf_filename: str | None,
     page_width: int,
     page_height: int,
+    show_cover: bool = False,
 ) -> str:
     """Render the flipbook HTML from template."""
     pages_json = json.dumps(page_paths)
@@ -213,6 +216,8 @@ def _render_html(
         "{{PAGE_HEIGHT}}", str(page_height)
     ).replace(
         "{{PAGE_COUNT}}", str(len(page_paths))
+    ).replace(
+        "{{SHOW_COVER}}", "true" if show_cover else "false"
     )
 
 
@@ -309,7 +314,7 @@ footer {
     text-align: center;
     padding: 0.3rem;
     font-size: 0.7rem;
-    color: #555;
+    color: #999;
     flex-shrink: 0;
 }
 </style>
@@ -366,7 +371,7 @@ footer {
         maxWidth: baseW,
         minHeight: 300,
         maxHeight: baseH,
-        showCover: true,
+        showCover: {{SHOW_COVER}},
         maxShadowOpacity: 0.5,
         mobileScrollSupport: false,
         flippingTime: 800,

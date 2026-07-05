@@ -354,8 +354,11 @@ def cleanup_cmd(output_dir, keep):
 @click.option("--title", type=str, default="",
               help="Title displayed in the flipbook viewer")
 @click.option("--no-pdf", is_flag=True, help="Omit PDF download link")
+@click.option("--cover", is_flag=True,
+              help="Treat the first page as a standalone cover (displayed alone before flipping)")
 @click.option("--no-open", is_flag=True, help="Don't open the browser automatically")
-def flipbook(output_dir, flipbook_dir, input_dir, max_width, quality, title, no_pdf, no_open):
+def flipbook(output_dir, flipbook_dir, input_dir, max_width, quality, title, no_pdf, cover,
+             no_open):
     """Generate a static HTML flipbook from processed pages.
 
     Reads images from the latest completed pipeline checkpoint in
@@ -363,6 +366,10 @@ def flipbook(output_dir, flipbook_dir, input_dir, max_width, quality, title, no_
     animation.  The result can be uploaded to any static hosting.
 
     If FLIPBOOK_DIR is not specified, defaults to OUTPUT_DIR/flipbook/.
+
+    By default, page 1 starts on the left (interior page layout).  Use
+    --cover if the first image is a book cover that should be displayed
+    alone on the right before flipping.
     """
     from ghh.flipbook import generate_flipbook
 
@@ -378,6 +385,7 @@ def flipbook(output_dir, flipbook_dir, input_dir, max_width, quality, title, no_
             jpeg_quality=quality,
             title=title,
             include_pdf=not no_pdf,
+            show_cover=cover,
         )
     except FileNotFoundError as exc:
         click.echo(str(exc), err=True)

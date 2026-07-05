@@ -52,9 +52,7 @@ def _make_pipeline_output(
             _make_image(out / stage_name / f"{stem}.png")
 
     if with_pdf:
-        pdf_dir = out / "12_pdf"
-        pdf_dir.mkdir()
-        (pdf_dir / "LPA-1.pdf").write_bytes(b"%PDF-1.4 fake pdf content")
+        (out / "LPA-1.pdf").write_bytes(b"%PDF-1.4 fake pdf content")
 
     return out
 
@@ -120,13 +118,8 @@ class TestFindPdf:
         assert pdf is not None
         assert pdf.name == "LPA-1.pdf"
 
-    def test_returns_none_when_no_pdf_dir(self, tmp_path: Path):
+    def test_returns_none_when_no_pdf(self, tmp_path: Path):
         out = _make_pipeline_output(tmp_path, with_pdf=False)
-        assert _find_pdf(out) is None
-
-    def test_returns_none_when_pdf_dir_empty(self, tmp_path: Path):
-        out = _make_pipeline_output(tmp_path, with_pdf=False)
-        (out / "12_pdf").mkdir()
         assert _find_pdf(out) is None
 
 
@@ -268,6 +261,18 @@ class TestGenerateFlipbook:
         html = index.read_text()
         assert "Page 1 of 5" in html
 
+    def test_show_cover_false_by_default(self, tmp_path: Path):
+        out = _make_pipeline_output(tmp_path)
+        index = generate_flipbook(out)
+        html = index.read_text()
+        assert "showCover: false" in html
+
+    def test_show_cover_true(self, tmp_path: Path):
+        out = _make_pipeline_output(tmp_path)
+        index = generate_flipbook(out, show_cover=True)
+        html = index.read_text()
+        assert "showCover: true" in html
+
 
 # ---------------------------------------------------------------------------
 # CLI: ghh flipbook
@@ -309,6 +314,16 @@ class TestFlipbookCLI:
         assert result.exit_code == 0
         html = (out / "flipbook" / "index.html").read_text()
         assert "My Title" in html
+
+    def test_cover_flag(self, tmp_path: Path):
+        out = _make_pipeline_output(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["flipbook", str(out), "--cover", "--no-open"]
+        )
+        assert result.exit_code == 0
+        html = (out / "flipbook" / "index.html").read_text()
+        assert "showCover: true" in html
 
     def test_error_no_images(self, tmp_path: Path):
         out = tmp_path / "empty"
