@@ -52,6 +52,11 @@ class PageDetectStage(BaseStage):
     checkpoint_name = "04_page_detected"
     error_class = "skippable"
 
+    def run(self, input_dir, output_dir, cfg, state):
+        if cfg.minimize_diskspace:
+            self.writes_image = False
+        return super().run(input_dir, output_dir, cfg, state)
+
     def process_image(
         self,
         img: np.ndarray,
@@ -163,9 +168,13 @@ def _try_adaptive(gray: np.ndarray, cfg: Config) -> np.ndarray | None:
 
 
 def _full_image_quad(h: int, w: int) -> np.ndarray:
-    """Return a quad covering the entire image (last resort)."""
+    """Return a quad covering the entire image (last resort).
+
+    Uses ``[w, h]`` (not ``w-1, h-1``) so that edge-to-edge spans
+    equal the image dimensions, preserving size through Stage 5.
+    """
     return np.array(
-        [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]],
+        [[0, 0], [w, 0], [w, h], [0, h]],
         dtype=np.float32,
     )
 

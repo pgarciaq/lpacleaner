@@ -59,6 +59,7 @@ class Config:
     keep_stages: list[str] | None = None
     verbose: bool = False
     quiet: bool = False
+    minimize_diskspace: bool = False
 
     # Book characteristics (from book.toml via analyze)
     staff_color_hue: int = 5
@@ -203,6 +204,7 @@ class Config:
         _map_if_present(kwargs, pipeline, "skip_enhance", "skip_enhance")
         _map_if_present(kwargs, pipeline, "skip_normalize", "skip_normalize")
         _map_if_present(kwargs, pipeline, "skip_ocr", "skip_ocr")
+        _map_if_present(kwargs, pipeline, "minimize_diskspace", "minimize_diskspace")
 
         # [enhance] section
         enhance = toml_data.get("enhance", {})

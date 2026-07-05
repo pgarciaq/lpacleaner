@@ -477,3 +477,26 @@ class TestPageDetectStageRun:
         sidecar = tmp_path / "04_page_detected" / "IMG_0001.json"
         meta = json.loads(sidecar.read_text())
         assert meta["method"] != "full_image"
+
+    def test_minimize_diskspace_creates_symlinks(self, tmp_path):
+        """With minimize_diskspace, Stage 4 should symlink images, not copy."""
+        from lpacleaner.stages.page_detect import PageDetectStage
+
+        page = make_music_page(width=600, height=400)
+        photo = make_page_on_background(page, border=80)
+        input_dir = _setup_stage_input(tmp_path, {"IMG_0001.png": photo})
+        cfg = Config(
+            input_dir=input_dir, output_dir=tmp_path,
+            minimize_diskspace=True,
+        )
+        state = PipelineState(tmp_path)
+        stage = PageDetectStage()
+
+        result = stage.run(input_dir, tmp_path, cfg, state)
+
+        assert result.processed == 1
+        out_img = tmp_path / "04_page_detected" / "IMG_0001.png"
+        assert out_img.is_symlink(), "Image should be a symlink"
+        assert out_img.resolve() == (input_dir / "IMG_0001.png").resolve()
+        sidecar = tmp_path / "04_page_detected" / "IMG_0001.json"
+        assert sidecar.exists(), "Sidecar should still be written"

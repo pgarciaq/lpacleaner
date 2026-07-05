@@ -154,6 +154,7 @@ class BaseStage(ABC):
     number: int              # e.g., 0
     checkpoint_name: str     # e.g., "00_preprocessed"
     error_class: str         # "skippable", "critical", "fatal"
+    writes_image: bool = True  # False → symlink to source image (saves disk)
 
     @abstractmethod
     def process_image(
@@ -208,10 +209,31 @@ class BaseStage(ABC):
                 if img is None:
                     raise OSError(f"Cannot read image: {img_path}")
 
-                metadata = {}
+                metadata: dict = {}
+                sidecar_path = img_path.with_suffix(".json")
+                if sidecar_path.exists():
+                    try:
+                        metadata = json.loads(sidecar_path.read_text())
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        logger.debug("Could not read sidecar %s", sidecar_path)
+
                 processed_img, metadata = self.process_image(img, metadata, cfg)
 
-                save_checkpoint(processed_img, stage_dir, stem, metadata=metadata or None)
+                if self.writes_image:
+                    save_checkpoint(
+                        processed_img, stage_dir, stem,
+                        metadata=metadata or None,
+                    )
+                else:
+                    out_png = stage_dir / f"{stem}.png"
+                    if out_png.is_symlink() or out_png.exists():
+                        out_png.unlink()
+                    out_png.symlink_to(img_path.resolve())
+                    if metadata:
+                        sidecar = stage_dir / f"{stem}.json"
+                        sidecar.write_text(
+                            json.dumps(metadata, indent=2, default=str),
+                        )
                 state.mark_image_done(self.checkpoint_name, stem)
                 result.processed += 1
 

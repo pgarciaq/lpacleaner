@@ -76,6 +76,14 @@ class TestComputeTargetSize:
         assert isinstance(w, int)
         assert isinstance(h, int)
 
+    def test_uses_max_not_average(self):
+        """Width/height should use the longer of opposite edges."""
+        corners = np.array([
+            [0, 0], [200, 0], [180, 100], [20, 100],
+        ], dtype=np.float32)
+        w, h = compute_target_size(corners)
+        assert w == 200, "Should use max(top=200, bottom=160), not average"
+
 
 class TestGetPerspectiveTransform:
     """Tests for get_perspective_transform(): 3x3 transformation matrix."""

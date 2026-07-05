@@ -47,8 +47,11 @@ def order_corners(pts: np.ndarray) -> np.ndarray:
 def compute_target_size(corners: np.ndarray) -> tuple[int, int]:
     """Compute the target rectangle dimensions from 4 ordered corners.
 
-    Takes the average of top/bottom edge lengths as width and
-    left/right edge lengths as height.
+    Uses the **maximum** of opposite edge pairs so that no content from
+    the longer edge is lost::
+
+        width  = max(dist(TL,TR), dist(BL,BR))
+        height = max(dist(TL,BL), dist(TR,BR))
 
     Args:
         corners: Array of shape (4, 2) in TL, TR, BR, BL order.
@@ -60,11 +63,11 @@ def compute_target_size(corners: np.ndarray) -> tuple[int, int]:
 
     top_w = np.linalg.norm(tr - tl)
     bottom_w = np.linalg.norm(br - bl)
-    width = int(round((top_w + bottom_w) / 2))
+    width = int(round(max(top_w, bottom_w)))
 
     left_h = np.linalg.norm(bl - tl)
     right_h = np.linalg.norm(br - tr)
-    height = int(round((left_h + right_h) / 2))
+    height = int(round(max(left_h, right_h)))
 
     return width, height
 

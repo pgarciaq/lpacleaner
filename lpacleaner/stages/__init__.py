@@ -13,6 +13,7 @@ from lpacleaner.stages.stitch import StitchStage
 from lpacleaner.stages.orientation import OrientationStage
 from lpacleaner.stages.lens_correct import LensCorrectStage
 from lpacleaner.stages.page_detect import PageDetectStage
+from lpacleaner.stages.perspective import PerspectiveStage
 
 STAGE_CLASSES: list[type[BaseStage]] = [
     PreprocessStage,   # 0
@@ -20,6 +21,7 @@ STAGE_CLASSES: list[type[BaseStage]] = [
     OrientationStage,  # 2
     LensCorrectStage,  # 3
     PageDetectStage,   # 4
+    PerspectiveStage,  # 5
 ]
 
 STAGE_BY_NUMBER: dict[int, type[BaseStage]] = {s.number: s for s in STAGE_CLASSES}

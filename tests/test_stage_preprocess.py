@@ -41,11 +41,19 @@ def _make_page_with_hotspot(h: int = 400, w: int = 600) -> np.ndarray:
 
 
 def _make_page_with_finger(h: int = 400, w: int = 600) -> np.ndarray:
-    """Beige page with a skin-colored region touching the right border."""
-    img = _make_clean_page(h, w)
-    # YCrCb skin range: Cr in (133,173), Cb in (77,127)
-    # In BGR: a warm skin-like color
-    skin_bgr = (100, 130, 200)  # approximate skin in BGR
+    """Neutral gray page with a skin-colored region touching the right border.
+
+    The background must NOT fall in the YCrCb skin range (Cr 133-173,
+    Cb 77-127), otherwise the entire page is classified as skin and the
+    finger component exceeds the 15% area cap.
+    BGR=(210,210,210) → Cr=128 Cb=128 (outside skin range).
+
+    The finger color must be IN the skin range but have HSV saturation
+    ≤120 so it isn't excluded by the ink-hue filter.
+    BGR=(130,160,200) → Cr=150 Cb=106 (skin ✓), S=89 (not ink ✓).
+    """
+    img = np.full((h, w, 3), (210, 210, 210), dtype=np.uint8)
+    skin_bgr = (130, 160, 200)
     cv2.rectangle(img, (w - 60, h // 3), (w, 2 * h // 3), skin_bgr, -1)
     return img
 

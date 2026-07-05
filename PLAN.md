@@ -49,7 +49,7 @@ physical condition (coastal preservation, humidity damage, aging).
 | 10 | Stage 2 (orientation) | **Done** | 31 tests | OSD + adaptive OSD + title + spine cascade; 224/224 on LPA-1 |
 | 11 | Stage 3 (lens correct) | **Done** | 22 tests | Optional; skips when k1=k2=0; `cv2.undistort` with `max(w,h)` focal length |
 | 12 | Stage 4 (page detect) | **Done** | 30 tests | Otsu→inverted Otsu→Canny→adaptive→full-image fallback; ink-aware classification; detect-only (no crop), quad in sidecar |
-| 13 | Stage 5 (perspective) | Pending | | |
+| 13 | Stage 5 (perspective) | **Done** | 28 tests | warpPerspective from Stage 4 quad; max-edge sizing; background fill; sidecar propagation |
 | 14 | Stage 6 (content area) | Pending | | |
 | 15 | Stage 8 (deskew) | Pending | | |
 | 16 | Stage 7 (dewarp) | Pending | | |
@@ -850,30 +850,56 @@ page_detect_expand_frac: float = 0.03  # fraction of avg edge length to expand q
 
 ---
 
-## Stage 5: Perspective Correction (`perspective.py`)
+## Stage 5: Perspective Correction (`perspective.py`) ✅
 
-### Algorithm
+### Algorithm (implemented)
 
 ```
-1. Load quad corners from Stage 4 metadata
-2. Compute target rectangle:
+1. Load quad corners from Stage 4 metadata sidecar:
+   a. BaseStage.run() reads {stem}.json from input directory
+   b. Passes metadata dict to process_image()
+   c. If no quad_corners key → pass-through (image unchanged)
+   d. If malformed (not 4x2) or degenerate (side < 10px) → pass-through
+
+2. Order corners TL → TR → BR → BL via order_corners()
+
+3. Compute target rectangle (max of opposite edges, not average):
    width  = max(dist(TL,TR), dist(BL,BR))
    height = max(dist(TL,BL), dist(TR,BR))
-3. dst = [[0,0], [width,0], [width,height], [0,height]]
-4. M = cv2.getPerspectiveTransform(src_corners, dst)
-5. Estimate background color: median of border pixels (outermost 5%)
-6. result = cv2.warpPerspective(img, M, (width, height),
-       borderMode=cv2.BORDER_CONSTANT, borderValue=bg_color)
+   Using max prevents content loss from the longer edge.
+
+4. Build destination corners:
+   dst = [[0,0], [width-1,0], [width-1,height-1], [0,height-1]]
+
+5. Compute transform: M = getPerspectiveTransform(src, dst)
+
+6. Estimate background color:
+   a. Sample outermost 5% border pixels on all four sides
+   b. Avoid double-counting corner rectangles
+   c. Per-channel median → fill color tuple
+
+7. Apply: warpPerspective(img, M, (width, height),
+       INTER_LINEAR, BORDER_CONSTANT, bg_color)
 ```
 
 Out-of-bounds pixels are filled with the estimated page background color,
 not black. This prevents downstream stages (enhance, normalize) from
 being confused by black corners.
 
+### Stage attributes
+
+```python
+name = "perspective"
+number = 5
+checkpoint_name = "05_perspective"
+error_class = "skippable"
+```
+
 ### Input/Output
 
-- Input: full image + quad corners from `04_page_detected/`
+- Input: full image + quad corners from `04_page_detected/` (sidecar JSON)
 - Output: rectangular image in `05_perspective/` (this is where the actual crop happens)
+- Metadata sidecar: stage, method, src_quad, dst_size, background_color
 
 ---
 
@@ -2900,7 +2926,7 @@ on synthetic images:
 11. ~~**Real image smoke test**~~: ✅ Stages 0-1-2 on full LPA-1 set (225 images), visual inspection confirmed 224/224 correct orientation
 12. ~~**Stage 3** (lens correct, optional)~~: ✅ radial distortion correction (R7) via `cv2.undistort`, auto-skip when k1=k2=0, `max(w,h)` focal length (22 tests)
 13. ~~**Stage 4** (page detect)~~: ✅ Otsu→inverted Otsu→Canny→adaptive→full-image cascade, quad refinement with escalating epsilon, ink-aware page classification, bounding-box crop (27 tests)
-14. **Stage 5** (perspective): homography from quad corners, background fill
+14. ~~**Stage 5** (perspective)~~: ✅ warpPerspective from Stage 4 quad, max-edge sizing, background fill (not black), sidecar propagation via BaseStage.run() (28 tests)
 15. **Stage 6** (content area): border detection, edge masking, margins
 16. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim
 17. **Stage 7** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
