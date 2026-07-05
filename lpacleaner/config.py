@@ -97,6 +97,21 @@ class Config:
     page_detect_padding: int = 10
     page_detect_expand_frac: float = 0.03
 
+    # Content area detection (Stage 6)
+    content_detect_inset_fallback: float = 0.05
+    content_margin_padding: float = 0.02
+    content_feather_sigma: int = 20
+
+    # Deskew (Stage 7)
+    deskew_max_angle: float = 5.0
+    deskew_angle_step: float = 0.1
+    deskew_skip_threshold: float = 0.1
+
+    # PDF assembly (Stage 12)
+    pdf_compression: str = "jpeg"
+    pdf_jpeg_quality: int = 90
+    pdf_dpi: int = 300
+
     # Photography / condition
     has_flash_hotspots: bool = False
     fingers_detected: bool = False
@@ -252,6 +267,26 @@ class Config:
         _map_if_present(kwargs, page_detect, "min_area_frac", "page_detect_min_area_frac")
         _map_if_present(kwargs, page_detect, "padding", "page_detect_padding")
         _map_if_present(kwargs, page_detect, "expand_frac", "page_detect_expand_frac")
+
+        # [content_area] section
+        content = toml_data.get("content_area", {})
+        _map_if_present(kwargs, content, "inset_fallback", "content_detect_inset_fallback")
+        _map_if_present(kwargs, content, "margin_padding", "content_margin_padding")
+        _map_if_present(kwargs, content, "feather_sigma", "content_feather_sigma")
+
+        # [deskew] section
+        deskew = toml_data.get("deskew", {})
+        _map_if_present(kwargs, deskew, "max_angle", "deskew_max_angle")
+        _map_if_present(kwargs, deskew, "angle_step", "deskew_angle_step")
+        _map_if_present(kwargs, deskew, "skip_threshold", "deskew_skip_threshold")
+
+        # [pdf] section
+        pdf = toml_data.get("pdf", {})
+        _map_if_present(kwargs, pdf, "compression", "pdf_compression")
+        _map_if_present(kwargs, pdf, "jpeg_quality", "pdf_jpeg_quality")
+        _map_if_present(kwargs, pdf, "dpi", "pdf_dpi")
+        if "pdf_compression" in kwargs:
+            kwargs["pdf_compression"] = str(kwargs["pdf_compression"]).lower()
 
         # [photography] section
         photography = toml_data.get("photography", {})

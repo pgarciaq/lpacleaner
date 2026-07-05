@@ -8,20 +8,26 @@ registry until they are implemented.
 from __future__ import annotations
 
 from lpacleaner.pipeline import BaseStage
+from lpacleaner.stages.content_area import ContentAreaStage
+from lpacleaner.stages.deskew import DeskewStage
+from lpacleaner.stages.lens_correct import LensCorrectStage
+from lpacleaner.stages.orientation import OrientationStage
+from lpacleaner.stages.page_detect import PageDetectStage
+from lpacleaner.stages.pdf_assembly import PDFAssemblyStage
+from lpacleaner.stages.perspective import PerspectiveStage
 from lpacleaner.stages.preprocess import PreprocessStage
 from lpacleaner.stages.stitch import StitchStage
-from lpacleaner.stages.orientation import OrientationStage
-from lpacleaner.stages.lens_correct import LensCorrectStage
-from lpacleaner.stages.page_detect import PageDetectStage
-from lpacleaner.stages.perspective import PerspectiveStage
 
 STAGE_CLASSES: list[type[BaseStage]] = [
-    PreprocessStage,   # 0
-    StitchStage,       # 1
-    OrientationStage,  # 2
-    LensCorrectStage,  # 3
-    PageDetectStage,   # 4
-    PerspectiveStage,  # 5
+    PreprocessStage,    # 0
+    StitchStage,        # 1
+    OrientationStage,   # 2
+    LensCorrectStage,   # 3
+    PageDetectStage,    # 4
+    PerspectiveStage,   # 5
+    ContentAreaStage,   # 6
+    DeskewStage,        # 7
+    PDFAssemblyStage,   # 12
 ]
 
 STAGE_BY_NUMBER: dict[int, type[BaseStage]] = {s.number: s for s in STAGE_CLASSES}
