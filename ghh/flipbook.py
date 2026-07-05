@@ -143,17 +143,17 @@ def generate_flipbook(
             logger.warning("No PDF found in %s/12_pdf/; omitting download link", output_dir)
 
     if dimensions:
-        max_w = max(d[0] for d in dimensions)
-        max_h = max(d[1] for d in dimensions)
+        med_idx = len(dimensions) // 2
+        page_w, page_h = dimensions[med_idx]
     else:
-        max_w, max_h = 800, 1200
+        page_w, page_h = 800, 1200
 
     html = _render_html(
         page_paths=page_paths,
         title=title,
         pdf_filename=pdf_filename,
-        page_width=max_w,
-        page_height=max_h,
+        page_width=page_w,
+        page_height=page_h,
     )
 
     index_path = flipbook_dir / "index.html"
@@ -162,7 +162,7 @@ def generate_flipbook(
     metadata = {
         "generated_at": datetime.now(UTC).isoformat(),
         "page_count": len(page_paths),
-        "max_dimensions": {"width": max_w, "height": max_h},
+        "max_dimensions": {"width": page_w, "height": page_h},
         "jpeg_quality": jpeg_quality,
         "max_width_setting": max_width,
         "title": title,
@@ -349,13 +349,19 @@ footer {
     const containerEl = document.getElementById('flipbook-container');
     const availW = containerEl.clientWidth - 40;
     const availH = containerEl.clientHeight - 40;
-    const baseW = Math.min({{PAGE_WIDTH}}, Math.floor(availW / 2));
-    const baseH = Math.min({{PAGE_HEIGHT}}, availH);
+
+    const pageAspect = {{PAGE_WIDTH}} / {{PAGE_HEIGHT}};
+    let baseH = Math.min({{PAGE_HEIGHT}}, availH);
+    let baseW = Math.round(baseH * pageAspect);
+    if (baseW * 2 > availW) {
+        baseW = Math.floor(availW / 2);
+        baseH = Math.round(baseW / pageAspect);
+    }
 
     const pageFlip = new St.PageFlip(container, {
         width: baseW,
         height: baseH,
-        size: "stretch",
+        size: "fixed",
         minWidth: 200,
         maxWidth: baseW,
         minHeight: 300,
