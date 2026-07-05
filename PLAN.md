@@ -58,12 +58,13 @@ physical condition (coastal preservation, humidity damage, aging).
 | 19 | Stage 11 (OCR) | Pending | | |
 | 20 | Stage 12 (PDF assembly) | **Done** | 35 tests | img2pdf; JPEG/PNG compression; case-insensitive; DPI layout; resume; exclude; 224-page LPA-1 PDF (311.9 MB) |
 | 21 | Stage 13 (flipbook export) | Pending | | |
-| -- | `compare` CLI command | **Done** | -- | Full-book HTML viewer; PgUp/PgDn image nav; side-by-side; auto-generated after `run` |
-| 22 | Pipeline orchestrator | Pending | | |
-| 23 | CLI polish | Pending | | |
-| 24 | Integration tests | Pending | | |
+| 22 | `compare` CLI command | **Done** | 26 tests | Full-book HTML viewer; PgUp/PgDn image nav; side-by-side; auto-generated after `run`; dark blue theme |
+| 23 | `publish` CLI command | **Done** | 16 tests | Self-contained JPEG site for web hosting; warm amber theme; stage filter; timestamped badge |
+| 24 | Pipeline orchestrator | Pending | | |
+| 25 | CLI polish | Pending | | |
+| 26 | Integration tests | Pending | | |
 
-**Totals:** 438 tests, all green.
+**Totals:** 480 tests, all green.
 
 ---
 
