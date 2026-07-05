@@ -81,7 +81,7 @@ class TestAnalyzeIntegration:
     """End-to-end tests for the analyze command."""
 
     def test_produces_book_toml(self, tmp_path):
-        from lpacleaner.stages.analyze import run_analyze
+        from ghh.stages.analyze import run_analyze
 
         book_dir = _make_book_dir(tmp_path)
         output_dir = tmp_path / "output"
@@ -93,7 +93,7 @@ class TestAnalyzeIntegration:
         assert toml_path.exists()
 
     def test_book_toml_has_required_sections(self, tmp_path):
-        from lpacleaner.stages.analyze import run_analyze
+        from ghh.stages.analyze import run_analyze
 
         book_dir = _make_book_dir(tmp_path)
         output_dir = tmp_path / "output"
@@ -111,8 +111,8 @@ class TestAnalyzeIntegration:
         assert "pipeline" in data
 
     def test_book_toml_round_trips_through_config(self, tmp_path):
-        from lpacleaner.config import Config
-        from lpacleaner.stages.analyze import run_analyze
+        from ghh.config import Config
+        from ghh.stages.analyze import run_analyze
 
         book_dir = _make_book_dir(tmp_path)
         output_dir = tmp_path / "output"
@@ -130,7 +130,7 @@ class TestAnalyzeIntegration:
 
     def test_graceful_with_few_images(self, tmp_path):
         """With <3 valid samples, should fall back to defaults."""
-        from lpacleaner.stages.analyze import run_analyze
+        from ghh.stages.analyze import run_analyze
 
         book_dir = tmp_path / "tiny_book"
         book_dir.mkdir()
@@ -153,7 +153,7 @@ class TestInkDiscovery:
     """Test ink color detection from sampled pages."""
 
     def test_detects_red_staff_ink(self, tmp_path):
-        from lpacleaner.stages.analyze import _discover_ink_color
+        from ghh.stages.analyze import _discover_ink_color
 
         pages = []
         for i in range(5):
@@ -165,7 +165,7 @@ class TestInkDiscovery:
         assert result["staff_color_hue"] < 20 or result["staff_color_hue"] > 160
 
     def test_detects_brown_staff_ink(self, tmp_path):
-        from lpacleaner.stages.analyze import _discover_ink_color
+        from ghh.stages.analyze import _discover_ink_color
 
         brown_bgr = (30, 50, 100)
         pages = []
@@ -178,7 +178,7 @@ class TestInkDiscovery:
         assert 5 < result["staff_color_hue"] < 30
 
     def test_returns_expected_keys(self, tmp_path):
-        from lpacleaner.stages.analyze import _discover_ink_color
+        from ghh.stages.analyze import _discover_ink_color
 
         pages = [make_music_page(width=400, height=300) for _ in range(5)]
         result = _discover_ink_color(pages)
@@ -199,7 +199,7 @@ class TestCoarseOrientation:
     """Test coarse (90°) orientation detection."""
 
     def test_upright_returns_zero(self, tmp_path):
-        from lpacleaner.stages.analyze import _detect_coarse_orientation
+        from ghh.stages.analyze import _detect_coarse_orientation
 
         pages = []
         for i in range(3):
@@ -211,7 +211,7 @@ class TestCoarseOrientation:
         assert offset == 0
 
     def test_detects_90_degree_rotation(self, tmp_path):
-        from lpacleaner.stages.analyze import _detect_coarse_orientation
+        from ghh.stages.analyze import _detect_coarse_orientation
 
         pages = []
         for i in range(3):
@@ -224,7 +224,7 @@ class TestCoarseOrientation:
         assert offset in (90, 270)
 
     def test_handles_no_staff_lines_gracefully(self, tmp_path):
-        from lpacleaner.stages.analyze import _detect_coarse_orientation
+        from ghh.stages.analyze import _detect_coarse_orientation
 
         pages = [np.full((300, 400, 3), (200, 200, 200), dtype=np.uint8)
                  for _ in range(3)]
@@ -241,7 +241,7 @@ class TestLayoutAnalysis:
     """Test layout feature detection."""
 
     def test_counts_staff_lines(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_layout
+        from ghh.stages.analyze import _analyze_layout
 
         pages = [make_music_page(width=400, height=300, num_staves=4)
                  for _ in range(5)]
@@ -252,7 +252,7 @@ class TestLayoutAnalysis:
         assert result["expected_staff_lines_per_page"] > 0
 
     def test_detects_border_frame(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_layout
+        from ghh.stages.analyze import _analyze_layout
 
         pages = [make_music_page(width=400, height=300)
                  for _ in range(5)]
@@ -262,7 +262,7 @@ class TestLayoutAnalysis:
         assert "has_border_frame" in result
 
     def test_computes_aspect_ratio(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_layout
+        from ghh.stages.analyze import _analyze_layout
 
         pages = [make_music_page(width=400, height=300)
                  for _ in range(5)]
@@ -281,7 +281,7 @@ class TestPhotographyCondition:
     """Test photography condition detection."""
 
     def test_detects_hotspots(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_photography
+        from ghh.stages.analyze import _analyze_photography
         from tests.conftest import add_hotspot
 
         pages = []
@@ -297,7 +297,7 @@ class TestPhotographyCondition:
         assert result["has_flash_hotspots"] is True
 
     def test_clean_images_no_hotspots(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_photography
+        from ghh.stages.analyze import _analyze_photography
 
         pages = [make_music_page(width=400, height=300) for _ in range(5)]
 
@@ -306,7 +306,7 @@ class TestPhotographyCondition:
         assert result["has_flash_hotspots"] is False
 
     def test_returns_expected_keys(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_photography
+        from ghh.stages.analyze import _analyze_photography
 
         pages = [make_music_page(width=400, height=300) for _ in range(5)]
 
@@ -326,7 +326,7 @@ class TestPhysicalCondition:
     """Test physical condition analysis."""
 
     def test_pristine_page_reports_none(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_condition
+        from ghh.stages.analyze import _analyze_condition
 
         pages = [make_music_page(width=400, height=300) for _ in range(5)]
 
@@ -337,7 +337,7 @@ class TestPhysicalCondition:
         assert result["salt_deposits"] == "none"
 
     def test_returns_expected_keys(self, tmp_path):
-        from lpacleaner.stages.analyze import _analyze_condition
+        from ghh.stages.analyze import _analyze_condition
 
         pages = [make_music_page(width=400, height=300) for _ in range(5)]
 

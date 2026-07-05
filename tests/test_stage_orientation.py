@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 from tests.conftest import make_music_page, make_text_page
 
@@ -54,30 +54,30 @@ class TestOrientationStageContract:
     """Verify that OrientationStage satisfies the BaseStage contract."""
 
     def test_has_correct_name(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         assert stage.name == "orientation"
 
     def test_has_correct_number(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         assert stage.number == 2
 
     def test_has_correct_checkpoint_name(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         assert stage.checkpoint_name == "02_oriented"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         assert issubclass(OrientationStage, BaseStage)
 
     def test_should_skip_always_false(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         cfg = Config(input_dir=Path("/tmp"))
@@ -93,7 +93,7 @@ class TestOrientationProcessImage:
 
     def test_upright_music_page_stays_upright(self):
         """A portrait music page with horizontal staff lines stays as-is."""
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=1200, height=1600)
@@ -107,7 +107,7 @@ class TestOrientationProcessImage:
 
     def test_sideways_music_page_rotated(self):
         """A music page stored sideways (staff lines vertical) should be rotated."""
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         page = make_music_page(width=1200, height=1600)
@@ -121,7 +121,7 @@ class TestOrientationProcessImage:
 
     def test_landscape_music_page_with_horizontal_lines_stays(self):
         """A landscape image with horizontal staff lines should NOT be axis-rotated."""
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=1600, height=1200)
@@ -133,7 +133,7 @@ class TestOrientationProcessImage:
 
     def test_text_page_portrait_stays(self):
         """A portrait text page stays portrait (horizontal text lines count too)."""
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_text_page(width=300, height=400)
@@ -145,7 +145,7 @@ class TestOrientationProcessImage:
 
     def test_blank_page_landscape_gets_portrait_fallback(self):
         """A landscape blank page (no lines at all) gets portrait fallback."""
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = np.full((300, 400, 3), (230, 220, 200), dtype=np.uint8)
@@ -158,7 +158,7 @@ class TestOrientationProcessImage:
 
     def test_osd_detects_upside_down_text(self):
         """OSD correctly detects upside-down text and flips."""
-        from lpacleaner.stages.orientation import _detect_osd_rotation
+        from ghh.stages.orientation import _detect_osd_rotation
 
         img = np.full((600, 400, 3), 255, dtype=np.uint8)
         cv2.putText(img, "Test Text Sample", (30, 200),
@@ -172,7 +172,7 @@ class TestOrientationProcessImage:
 
     def test_osd_keeps_upright_text(self):
         """OSD correctly identifies upright text."""
-        from lpacleaner.stages.orientation import _detect_osd_rotation
+        from ghh.stages.orientation import _detect_osd_rotation
 
         img = np.full((600, 400, 3), 255, dtype=np.uint8)
         cv2.putText(img, "Test Text Sample", (30, 200),
@@ -185,7 +185,7 @@ class TestOrientationProcessImage:
 
     def test_osd_returns_none_on_blank(self):
         """OSD gracefully returns None on blank images."""
-        from lpacleaner.stages.orientation import _detect_osd_rotation
+        from ghh.stages.orientation import _detect_osd_rotation
 
         img = np.full((400, 300, 3), 255, dtype=np.uint8)
         deg, conf = _detect_osd_rotation(img)
@@ -196,7 +196,7 @@ class TestOrientationProcessImage:
 
         On small synthetic images OSD fails, so the title fallback decides.
         """
-        from lpacleaner.stages.orientation import _correct_polarity
+        from ghh.stages.orientation import _correct_polarity
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
@@ -209,7 +209,7 @@ class TestOrientationProcessImage:
 
     def test_polarity_keeps_right_side_up(self):
         """A page with red title at the top edge stays as-is."""
-        from lpacleaner.stages.orientation import _correct_polarity
+        from ghh.stages.orientation import _correct_polarity
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
@@ -222,7 +222,7 @@ class TestOrientationProcessImage:
 
     def test_polarity_ignores_body_rubrics_with_dark_text(self):
         """Red rubrics mixed with dark text in the body don't fool polarity."""
-        from lpacleaner.stages.orientation import _correct_polarity
+        from ghh.stages.orientation import _correct_polarity
 
         img = np.full((400, 300, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
@@ -239,7 +239,7 @@ class TestOrientationProcessImage:
 
     def test_staff_area_rejects_textured_surface(self):
         """A rusty/textured surface should fail the staff-area validation."""
-        from lpacleaner.stages.orientation import _has_real_staff_lines
+        from ghh.stages.orientation import _has_real_staff_lines
 
         img = np.full((1200, 1600, 3), (230, 220, 200), dtype=np.uint8)
         red = (0, 0, 200)
@@ -251,7 +251,7 @@ class TestOrientationProcessImage:
 
     def test_staff_area_accepts_real_staff_lines(self):
         """Thin staff lines should pass the staff-area validation."""
-        from lpacleaner.stages.orientation import _has_real_staff_lines
+        from ghh.stages.orientation import _has_real_staff_lines
 
         img = make_music_page(width=1600, height=1200)
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
@@ -260,7 +260,7 @@ class TestOrientationProcessImage:
 
     def test_staff_area_rejects_blank_page(self):
         """A blank/dirty page with no red ink should fail validation."""
-        from lpacleaner.stages.orientation import _has_real_staff_lines
+        from ghh.stages.orientation import _has_real_staff_lines
 
         img = np.full((1200, 1600, 3), (230, 220, 200), dtype=np.uint8)
         cfg = Config(input_dir=Path("/tmp"), staff_color_hue=0, staff_color_range=15)
@@ -269,7 +269,7 @@ class TestOrientationProcessImage:
 
     def test_spine_detection_flips_when_spine_on_right(self):
         """Spine on the right edge (darker, more saturated) triggers flip."""
-        from lpacleaner.stages.orientation import _detect_spine_polarity
+        from ghh.stages.orientation import _detect_spine_polarity
 
         img = np.full((400, 300, 3), (180, 180, 180), dtype=np.uint8)
         # Right edge: darker and more saturated (simulating a worn spine)
@@ -280,7 +280,7 @@ class TestOrientationProcessImage:
 
     def test_spine_detection_keeps_when_spine_on_left(self):
         """Spine already on the left keeps image unchanged."""
-        from lpacleaner.stages.orientation import _detect_spine_polarity
+        from ghh.stages.orientation import _detect_spine_polarity
 
         img = np.full((400, 300, 3), (180, 180, 180), dtype=np.uint8)
         # Left edge: darker and more saturated
@@ -291,7 +291,7 @@ class TestOrientationProcessImage:
 
     def test_spine_detection_no_flip_on_symmetric_image(self):
         """A symmetric image (no clear spine) should not be flipped."""
-        from lpacleaner.stages.orientation import _detect_spine_polarity
+        from ghh.stages.orientation import _detect_spine_polarity
 
         img = np.full((400, 300, 3), (180, 180, 180), dtype=np.uint8)
 
@@ -299,7 +299,7 @@ class TestOrientationProcessImage:
         assert did_flip is False
 
     def test_computes_focus_score(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=300, height=400)
@@ -312,7 +312,7 @@ class TestOrientationProcessImage:
         assert meta["focus_score"] > 0
 
     def test_flags_blurry_image(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=300, height=400)
@@ -325,7 +325,7 @@ class TestOrientationProcessImage:
         assert meta["is_blurry"] is True
 
     def test_sharp_image_not_flagged(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=300, height=400)
@@ -336,7 +336,7 @@ class TestOrientationProcessImage:
         assert meta["is_blurry"] is False
 
     def test_metadata_includes_orientation_method(self):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         stage = OrientationStage()
         img = make_music_page(width=300, height=400)
@@ -356,7 +356,7 @@ class TestOrientationStageRun:
     """Integration tests for OrientationStage.run()."""
 
     def test_produces_checkpoint_directory(self, tmp_path):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -370,7 +370,7 @@ class TestOrientationStageRun:
         assert (tmp_path / "02_oriented").exists()
 
     def test_processes_all_images(self, tmp_path):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -389,7 +389,7 @@ class TestOrientationStageRun:
         assert len(out_files) == 3
 
     def test_writes_metadata_with_focus_score(self, tmp_path):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -407,7 +407,7 @@ class TestOrientationStageRun:
         assert meta["stage"] == "orientation"
 
     def test_resume_skips_completed(self, tmp_path):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -424,7 +424,7 @@ class TestOrientationStageRun:
         assert result2.processed == 0
 
     def test_returns_stage_result(self, tmp_path):
-        from lpacleaner.stages.orientation import OrientationStage
+        from ghh.stages.orientation import OrientationStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),

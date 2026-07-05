@@ -17,8 +17,8 @@ import logging
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
+from ghh.config import Config
+from ghh.pipeline import BaseStage
 
 logger = logging.getLogger(__name__)
 

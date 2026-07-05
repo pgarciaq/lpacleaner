@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from lpacleaner import __version__
+from ghh import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @click.group()
 @click.version_option(version=__version__)
 def main():
-    """LPA Cleaner -- process photographed book pages into searchable PDFs."""
+    """Guido's Helping Hand -- process photographed book pages into searchable PDFs."""
 
 
 @main.command()
@@ -50,9 +50,9 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
     Runs all implemented stages by default.  Use --stages to select specific
     stages (e.g. ``--stages 0-2`` for preprocess, stitch, orientation).
     """
-    from lpacleaner.config import Config
-    from lpacleaner.pipeline import PipelineState
-    from lpacleaner.stages import get_stages, parse_stage_spec, ALL_STAGE_NUMBERS
+    from ghh.config import Config
+    from ghh.pipeline import PipelineState
+    from ghh.stages import get_stages, parse_stage_spec, ALL_STAGE_NUMBERS
 
     _configure_logging(verbose, quiet)
 
@@ -134,7 +134,7 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
     click.echo(f"Done. {total_processed} images processed, {total_failed} failures.")
 
     try:
-        from lpacleaner.compare import write_compare_html
+        from ghh.compare import write_compare_html
         html_path = write_compare_html(output_path, input_path)
         click.echo(f"Comparison viewer: {html_path}")
     except Exception as exc:
@@ -154,7 +154,7 @@ def _find_previous_checkpoint(
     Walks backward from *current_number* looking for an existing checkpoint
     directory, regardless of whether that stage was in the current run.
     """
-    from lpacleaner.stages import STAGE_BY_NUMBER
+    from ghh.stages import STAGE_BY_NUMBER
 
     for n in range(current_number - 1, -1, -1):
         cls = STAGE_BY_NUMBER.get(n)
@@ -224,7 +224,7 @@ def compare(output_dir, image_stem, input_dir, no_open):
     If IMAGE_STEM is provided (e.g. IMG_0012), the viewer opens at
     that image.  Otherwise it starts at the first image.
     """
-    from lpacleaner.compare import discover_book, generate_compare_html, infer_input_dir
+    from ghh.compare import discover_book, generate_compare_html, infer_input_dir
 
     output_path = Path(output_dir)
 
@@ -276,7 +276,7 @@ def publish(output_dir, publish_dir, input_dir, max_dim, quality, stage_spec, no
     is a self-contained directory ready for static web hosting
     (GitHub Pages, Netlify, S3, etc.).
     """
-    from lpacleaner.compare import infer_input_dir, publish_book
+    from ghh.compare import infer_input_dir, publish_book
 
     output_path = Path(output_dir)
 

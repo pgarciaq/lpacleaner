@@ -34,8 +34,8 @@ import cv2
 import img2pdf
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 logger = logging.getLogger(__name__)
 

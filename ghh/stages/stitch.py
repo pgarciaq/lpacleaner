@@ -14,10 +14,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
-from lpacleaner.utils.image_io import ensure_checkpoint_dir, save_checkpoint
-from lpacleaner.utils.stitch import (
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
+from ghh.utils.image_io import ensure_checkpoint_dir, save_checkpoint
+from ghh.utils.stitch import (
     compute_focus,
     deduplicate_retakes,
     detect_groups,

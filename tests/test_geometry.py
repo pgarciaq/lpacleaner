@@ -1,11 +1,11 @@
-"""TDD tests for lpacleaner.utils.geometry -- quad ordering, homography, distance helpers."""
+"""TDD tests for ghh.utils.geometry -- quad ordering, homography, distance helpers."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from lpacleaner.utils.geometry import (
+from ghh.utils.geometry import (
     compute_target_size,
     get_perspective_transform,
     order_corners,

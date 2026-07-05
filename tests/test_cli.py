@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
-from lpacleaner.cli import main
-from lpacleaner.stages import parse_stage_spec, get_stages, ALL_STAGE_NUMBERS
+from ghh.cli import main
+from ghh.stages import parse_stage_spec, get_stages, ALL_STAGE_NUMBERS
 from tests.conftest import make_music_page
 
 
@@ -83,7 +83,7 @@ class TestGetStages:
             get_stages([99])
 
     def test_returns_instances(self):
-        from lpacleaner.pipeline import BaseStage
+        from ghh.pipeline import BaseStage
 
         stages = get_stages([0])
         assert isinstance(stages[0], BaseStage)

@@ -13,8 +13,8 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 from tests.conftest import (
     make_music_page,
@@ -56,27 +56,27 @@ class TestPageDetectStageContract:
     """Verify that PageDetectStage satisfies the BaseStage contract."""
 
     def test_has_correct_name(self):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         assert PageDetectStage().name == "page_detect"
 
     def test_has_correct_number(self):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         assert PageDetectStage().number == 4
 
     def test_has_correct_checkpoint_name(self):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         assert PageDetectStage().checkpoint_name == "04_page_detected"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         assert issubclass(PageDetectStage, BaseStage)
 
     def test_error_class_is_skippable(self):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         assert PageDetectStage().error_class == "skippable"
 
@@ -85,7 +85,7 @@ class TestPageDetectStageContract:
         assert cfg.should_skip_stage("page_detect") is False
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER, STAGE_BY_NAME
+        from ghh.stages import STAGE_BY_NUMBER, STAGE_BY_NAME
 
         assert 4 in STAGE_BY_NUMBER
         assert "page_detect" in STAGE_BY_NAME
@@ -100,7 +100,7 @@ class TestPageDetection:
 
     def test_detects_page_on_dark_background(self):
         """A light page on a dark background should be found by Otsu."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -117,7 +117,7 @@ class TestPageDetection:
 
     def test_detects_text_page_on_dark_background(self):
         """A text page should be detected and classified as text."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_text_page(width=600, height=400)
@@ -131,7 +131,7 @@ class TestPageDetection:
 
     def test_full_image_passes_through(self):
         """The full image should pass through unchanged (no crop)."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -144,7 +144,7 @@ class TestPageDetection:
 
     def test_quad_corners_are_ordered(self):
         """Corners should be in TL, TR, BR, BL order."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -161,7 +161,7 @@ class TestPageDetection:
 
     def test_quad_corners_within_image_bounds(self):
         """Quad corners should be within the image bounds."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -179,7 +179,7 @@ class TestPageDetection:
 
     def test_uniform_image_still_produces_quad(self):
         """A uniform image should still produce a valid quad (possibly full_image)."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         uniform = np.full((400, 600, 3), (128, 128, 128), dtype=np.uint8)
@@ -194,7 +194,7 @@ class TestPageDetection:
 
     def test_quad_covers_page_region(self):
         """The detected quad should cover the page area, not just a sliver."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -210,7 +210,7 @@ class TestPageDetection:
 
     def test_respects_forced_method(self):
         """When page_detect_method is set, only that method is tried."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         stage = PageDetectStage()
         page = make_music_page(width=600, height=400)
@@ -230,7 +230,7 @@ class TestQuadExpansion:
     """Test quad expansion logic."""
 
     def test_expand_pushes_corners_outward(self):
-        from lpacleaner.stages.page_detect import _expand_quad
+        from ghh.stages.page_detect import _expand_quad
 
         quad = np.array(
             [[100, 100], [500, 100], [500, 400], [100, 400]], dtype=np.float32,
@@ -243,7 +243,7 @@ class TestQuadExpansion:
         assert expanded[2][1] > quad[2][1], "BR should move down"
 
     def test_expand_clamps_to_image_bounds(self):
-        from lpacleaner.stages.page_detect import _expand_quad
+        from ghh.stages.page_detect import _expand_quad
 
         quad = np.array(
             [[5, 5], [795, 5], [795, 595], [5, 595]], dtype=np.float32,
@@ -256,7 +256,7 @@ class TestQuadExpansion:
         assert np.all(expanded[:, 1] <= 599)
 
     def test_expand_zero_frac_is_noop(self):
-        from lpacleaner.stages.page_detect import _expand_quad
+        from ghh.stages.page_detect import _expand_quad
 
         quad = np.array(
             [[100, 100], [500, 100], [500, 400], [100, 400]], dtype=np.float32,
@@ -270,7 +270,7 @@ class TestQuadRefinement:
 
     def test_refine_rectangle_contour(self):
         """A rectangle contour should yield a 4-point quad."""
-        from lpacleaner.stages.page_detect import _refine_to_quad
+        from ghh.stages.page_detect import _refine_to_quad
 
         contour = np.array([
             [[100, 100]], [[500, 100]], [[500, 400]], [[100, 400]]
@@ -282,7 +282,7 @@ class TestQuadRefinement:
 
     def test_refine_complex_contour(self):
         """A many-sided contour should still produce a 4-point quad."""
-        from lpacleaner.stages.page_detect import _refine_to_quad
+        from ghh.stages.page_detect import _refine_to_quad
 
         angles = np.linspace(0, 2 * np.pi, 20, endpoint=False)
         pts = np.column_stack([
@@ -305,7 +305,7 @@ class TestPageClassification:
 
     def test_music_page_classified_as_music(self):
         """A page with staff lines should be classified as music."""
-        from lpacleaner.stages.page_detect import _classify_page_type
+        from ghh.stages.page_detect import _classify_page_type
 
         page = make_music_page(width=800, height=600)
         quad = np.array(
@@ -317,7 +317,7 @@ class TestPageClassification:
 
     def test_text_page_classified_as_text(self):
         """A text-only page should be classified as text."""
-        from lpacleaner.stages.page_detect import _classify_page_type
+        from ghh.stages.page_detect import _classify_page_type
 
         page = make_text_page(width=800, height=600)
         quad = np.array(
@@ -330,7 +330,7 @@ class TestPageClassification:
 
     def test_blank_page_classified_as_blank(self):
         """A uniform bright page should be classified as blank."""
-        from lpacleaner.stages.page_detect import _classify_page_type
+        from ghh.stages.page_detect import _classify_page_type
 
         page = _make_blank_page(width=800, height=600)
         quad = np.array(
@@ -385,7 +385,7 @@ class TestPageDetectStageRun:
     """Integration tests for PageDetectStage.run()."""
 
     def test_produces_checkpoint_directory(self, tmp_path):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -399,7 +399,7 @@ class TestPageDetectStageRun:
         assert (tmp_path / "04_page_detected").exists()
 
     def test_processes_multiple_images(self, tmp_path):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -420,7 +420,7 @@ class TestPageDetectStageRun:
         assert len(out_files) == 3
 
     def test_writes_metadata_sidecar(self, tmp_path):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -440,7 +440,7 @@ class TestPageDetectStageRun:
         assert "method" in meta
 
     def test_resume_skips_completed(self, tmp_path):
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -460,7 +460,7 @@ class TestPageDetectStageRun:
 
     def test_perspective_skew_detected(self, tmp_path):
         """Pages with perspective skew should still be detected."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=100, perspective_skew=0.03)
@@ -480,7 +480,7 @@ class TestPageDetectStageRun:
 
     def test_minimize_diskspace_creates_symlinks(self, tmp_path):
         """With minimize_diskspace, Stage 4 should symlink images, not copy."""
-        from lpacleaner.stages.page_detect import PageDetectStage
+        from ghh.stages.page_detect import PageDetectStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)

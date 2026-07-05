@@ -7,16 +7,16 @@ registry until they are implemented.
 
 from __future__ import annotations
 
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.stages.content_area import ContentAreaStage
-from lpacleaner.stages.deskew import DeskewStage
-from lpacleaner.stages.lens_correct import LensCorrectStage
-from lpacleaner.stages.orientation import OrientationStage
-from lpacleaner.stages.page_detect import PageDetectStage
-from lpacleaner.stages.pdf_assembly import PDFAssemblyStage
-from lpacleaner.stages.perspective import PerspectiveStage
-from lpacleaner.stages.preprocess import PreprocessStage
-from lpacleaner.stages.stitch import StitchStage
+from ghh.pipeline import BaseStage
+from ghh.stages.content_area import ContentAreaStage
+from ghh.stages.deskew import DeskewStage
+from ghh.stages.lens_correct import LensCorrectStage
+from ghh.stages.orientation import OrientationStage
+from ghh.stages.page_detect import PageDetectStage
+from ghh.stages.pdf_assembly import PDFAssemblyStage
+from ghh.stages.perspective import PerspectiveStage
+from ghh.stages.preprocess import PreprocessStage
+from ghh.stages.stitch import StitchStage
 
 STAGE_CLASSES: list[type[BaseStage]] = [
     PreprocessStage,    # 0

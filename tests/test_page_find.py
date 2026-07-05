@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.utils.page_find import find_page_quad, crop_to_page
+from ghh.utils.page_find import find_page_quad, crop_to_page
 
 
 # ---------------------------------------------------------------------------

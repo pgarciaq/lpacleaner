@@ -14,9 +14,9 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import PipelineState, StageResult
-from lpacleaner.stages.preprocess import PreprocessStage
+from ghh.config import Config
+from ghh.pipeline import PipelineState, StageResult
+from ghh.stages.preprocess import PreprocessStage
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ class TestPreprocessStageContract:
         assert stage.error_class == "skippable"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.pipeline import BaseStage
+        from ghh.pipeline import BaseStage
         assert issubclass(PreprocessStage, BaseStage)
 
 

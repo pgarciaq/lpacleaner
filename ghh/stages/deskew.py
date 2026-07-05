@@ -25,10 +25,10 @@ import logging
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.utils.image_utils import estimate_background, trim_to_content
-from lpacleaner.utils.line_detect import detect_dominant_angle
+from ghh.config import Config
+from ghh.pipeline import BaseStage
+from ghh.utils.image_utils import estimate_background, trim_to_content
+from ghh.utils.line_detect import detect_dominant_angle
 
 logger = logging.getLogger(__name__)
 

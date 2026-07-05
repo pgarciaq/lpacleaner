@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.utils.preprocess import detect_fingers, remove_fingers, remove_hotspots
+from ghh.config import Config
+from ghh.pipeline import BaseStage
+from ghh.utils.preprocess import detect_fingers, remove_fingers, remove_hotspots
 
 
 class PreprocessStage(BaseStage):

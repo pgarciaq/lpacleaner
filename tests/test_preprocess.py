@@ -1,4 +1,4 @@
-"""TDD tests for lpacleaner.utils.preprocess -- hotspot removal (R1), finger detection (R8)."""
+"""TDD tests for ghh.utils.preprocess -- hotspot removal (R1), finger detection (R8)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from tests.conftest import add_finger, add_hotspot, make_music_page
-from lpacleaner.config import Config
-from lpacleaner.utils.preprocess import (
+from ghh.config import Config
+from ghh.utils.preprocess import (
     detect_fingers,
     remove_fingers,
     remove_hotspots,

@@ -1,4 +1,4 @@
-"""TDD tests for lpacleaner.pipeline -- BaseStage contract and PipelineState."""
+"""TDD tests for ghh.pipeline -- BaseStage contract and PipelineState."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 
 # ---------------------------------------------------------------------------

@@ -22,8 +22,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.utils.image_io import ensure_checkpoint_dir, save_checkpoint
+from ghh.config import Config
+from ghh.utils.image_io import ensure_checkpoint_dir, save_checkpoint
 
 logger = logging.getLogger(__name__)
 

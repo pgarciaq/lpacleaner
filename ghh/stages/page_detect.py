@@ -36,10 +36,10 @@ import logging
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.utils.geometry import order_corners
-from lpacleaner.utils.line_detect import detect_staff_lines
+from ghh.config import Config
+from ghh.pipeline import BaseStage
+from ghh.utils.geometry import order_corners
+from ghh.utils.line_detect import detect_staff_lines
 
 logger = logging.getLogger(__name__)
 

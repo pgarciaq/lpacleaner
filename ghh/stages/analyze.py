@@ -2,7 +2,7 @@
 
 Scans sample images from a book directory, detects ink color, layout,
 photography conditions, and physical condition, then writes a book.toml
-configuration file. Runs automatically as part of ``lpacleaner run`` if
+configuration file. Runs automatically as part of ``ghh run`` if
 no book.toml exists.
 """
 
@@ -21,11 +21,11 @@ else:
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.utils.image_io import load_image
-from lpacleaner.utils.line_detect import count_horizontal_lines
-from lpacleaner.utils.page_find import crop_to_page, find_page_quad
-from lpacleaner.utils.stats import adaptive_sample_count, robust_median
+from ghh.config import Config
+from ghh.utils.image_io import load_image
+from ghh.utils.line_detect import count_horizontal_lines
+from ghh.utils.page_find import crop_to_page, find_page_quad
+from ghh.utils.stats import adaptive_sample_count, robust_median
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +218,7 @@ def _detect_coarse_orientation(images: list[np.ndarray]) -> int:
 
 def _analyze_layout(pages: list[np.ndarray]) -> dict:
     """Detect layout features from cropped pages."""
-    from lpacleaner.utils.line_detect import detect_staff_lines
+    from ghh.utils.line_detect import detect_staff_lines
 
     cfg = Config(input_dir=Path("/tmp"))
 
@@ -320,7 +320,7 @@ def _has_hotspot(img: np.ndarray) -> bool:
 
 def _has_finger(img: np.ndarray) -> bool:
     """Check for skin-colored regions at image borders."""
-    from lpacleaner.utils.preprocess import detect_fingers
+    from ghh.utils.preprocess import detect_fingers
 
     cfg = Config(input_dir=Path("/tmp"))
     mask = detect_fingers(img, cfg)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lpacleaner.utils.stats import robust_median, adaptive_sample_count
+from ghh.utils.stats import robust_median, adaptive_sample_count
 
 
 # ---------------------------------------------------------------------------

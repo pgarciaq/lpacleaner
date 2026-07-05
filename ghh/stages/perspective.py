@@ -26,14 +26,14 @@ import logging
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.utils.geometry import (
+from ghh.config import Config
+from ghh.pipeline import BaseStage
+from ghh.utils.geometry import (
     compute_target_size,
     get_perspective_transform,
     order_corners,
 )
-from lpacleaner.utils.image_utils import estimate_background
+from ghh.utils.image_utils import estimate_background
 
 logger = logging.getLogger(__name__)
 

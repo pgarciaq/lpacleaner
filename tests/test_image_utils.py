@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lpacleaner.utils.image_utils import estimate_background, trim_to_content
+from ghh.utils.image_utils import estimate_background, trim_to_content
 
 
 # ---------------------------------------------------------------------------

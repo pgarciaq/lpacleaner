@@ -14,8 +14,8 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 from tests.conftest import (
     make_music_page,
@@ -93,38 +93,38 @@ class TestPerspectiveStageContract:
     """Verify that PerspectiveStage satisfies the BaseStage contract."""
 
     def test_has_correct_name(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         assert PerspectiveStage().name == "perspective"
 
     def test_has_correct_number(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         assert PerspectiveStage().number == 5
 
     def test_has_correct_checkpoint_name(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         assert PerspectiveStage().checkpoint_name == "05_perspective"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         assert issubclass(PerspectiveStage, BaseStage)
 
     def test_error_class_is_skippable(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         assert PerspectiveStage().error_class == "skippable"
 
     def test_is_not_skippable_by_default(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         cfg = Config(input_dir=Path("/tmp"))
         assert PerspectiveStage().should_skip(cfg) is False
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER
+        from ghh.stages import STAGE_BY_NUMBER
 
         assert 5 in STAGE_BY_NUMBER
         assert STAGE_BY_NUMBER[5].name == "perspective"
@@ -139,7 +139,7 @@ class TestPerspectivePassthrough:
 
     def test_passthrough_when_no_quad(self):
         """Without quad_corners in metadata, image passes through unchanged."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = make_music_page(width=600, height=400)
@@ -152,7 +152,7 @@ class TestPerspectivePassthrough:
 
     def test_passthrough_when_quad_wrong_shape(self):
         """Malformed quad_corners should trigger pass-through."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = make_music_page(width=600, height=400)
@@ -166,7 +166,7 @@ class TestPerspectivePassthrough:
 
     def test_passthrough_when_quad_degenerate(self):
         """A tiny/degenerate quad should trigger pass-through."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = make_music_page(width=600, height=400)
@@ -188,7 +188,7 @@ class TestPerspectiveCorrection:
 
     def test_rectangular_quad_produces_correct_size(self):
         """A rectangular quad should produce output with matching dimensions."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         page = make_music_page(width=600, height=400)
@@ -208,7 +208,7 @@ class TestPerspectiveCorrection:
 
     def test_skewed_quad_is_rectified(self):
         """A perspective-skewed quad should be mapped to a rectangle."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         photo, quad = _make_skewed_page_with_quad(border=80, skew=0.04)
@@ -225,7 +225,7 @@ class TestPerspectiveCorrection:
 
     def test_output_uses_max_edge_lengths(self):
         """Output dimensions should use max (not average) of opposite edges."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
@@ -245,7 +245,7 @@ class TestPerspectiveCorrection:
 
     def test_preserves_page_content(self):
         """Rectified output should contain page content, not just background."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         page = make_music_page(width=600, height=400)
@@ -264,7 +264,7 @@ class TestPerspectiveCorrection:
 
     def test_full_image_quad_is_near_identity(self):
         """A quad covering the full image should produce near-identical output."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = make_music_page(width=600, height=400)
@@ -291,8 +291,8 @@ class TestPerspectiveCorrection:
 
     def test_full_image_quad_fallback_preserves_size(self):
         """_full_image_quad uses [w,h] corners, so output matches input size."""
-        from lpacleaner.stages.page_detect import _full_image_quad
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.page_detect import _full_image_quad
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = make_music_page(width=600, height=400)
@@ -316,7 +316,7 @@ class TestBackgroundFill:
 
     def test_background_is_not_black(self):
         """Border fill should match estimated background, not default black."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         bg = (200, 190, 180)
@@ -338,7 +338,7 @@ class TestBackgroundFill:
 
     def test_estimate_background_on_dark_image(self):
         """Background estimation on a dark border image."""
-        from lpacleaner.utils.image_utils import estimate_background
+        from ghh.utils.image_utils import estimate_background
 
         dark = np.full((400, 600, 3), (30, 25, 20), dtype=np.uint8)
         bg = estimate_background(dark)
@@ -349,7 +349,7 @@ class TestBackgroundFill:
 
     def test_estimate_background_on_grayscale(self):
         """Background estimation should work on single-channel images."""
-        from lpacleaner.utils.image_utils import estimate_background
+        from ghh.utils.image_utils import estimate_background
 
         gray = np.full((400, 600), 180, dtype=np.uint8)
         bg = estimate_background(gray)
@@ -366,7 +366,7 @@ class TestPerspectiveMetadata:
     """Test metadata sidecar contents."""
 
     def test_metadata_has_required_fields(self):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
@@ -383,7 +383,7 @@ class TestPerspectiveMetadata:
 
     def test_forwards_page_type_from_stage4(self):
         """Stage 5 should forward page_type from Stage 4 metadata."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
@@ -398,7 +398,7 @@ class TestPerspectiveMetadata:
 
     def test_forwards_page_type_on_passthrough(self):
         """page_type should also be forwarded when Stage 5 passes through."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
@@ -409,7 +409,7 @@ class TestPerspectiveMetadata:
 
     def test_src_quad_is_ordered(self):
         """The src_quad in metadata should be in TL,TR,BR,BL order."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
@@ -433,7 +433,7 @@ class TestSidecarPropagation:
     @pytest.mark.slow
     def test_reads_quad_from_stage4_sidecar(self, tmp_path):
         """Stage 5 run() should read quad_corners from Stage 4's JSON sidecar."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -460,7 +460,7 @@ class TestSidecarPropagation:
     @pytest.mark.slow
     def test_passthrough_without_sidecar(self, tmp_path):
         """Without a sidecar, Stage 5 should pass through unchanged."""
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         img = make_music_page(width=600, height=400)
         input_dir = tmp_path / "04_page_detected"
@@ -488,7 +488,7 @@ class TestPerspectiveStageRun:
     """Integration tests for PerspectiveStage.run()."""
 
     def test_produces_checkpoint_directory(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -507,7 +507,7 @@ class TestPerspectiveStageRun:
         assert (tmp_path / "05_perspective").exists()
 
     def test_processes_multiple_images(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         quad = [[80, 80], [680, 80], [680, 480], [80, 480]]
         s4_meta = {"stage": "page_detect", "quad_corners": quad}
@@ -530,7 +530,7 @@ class TestPerspectiveStageRun:
             assert (tmp_path / "05_perspective" / f"IMG_{i:04d}.png").exists()
 
     def test_writes_metadata_sidecar(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -554,7 +554,7 @@ class TestPerspectiveStageRun:
         assert "dst_size" in meta
 
     def test_resume_skips_completed(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -576,7 +576,7 @@ class TestPerspectiveStageRun:
         assert r2.skipped == 1
 
     def test_returns_stage_result(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=80)
@@ -598,7 +598,7 @@ class TestPerspectiveStageRun:
         assert result.failed == 0
 
     def test_skewed_page_is_rectified_in_run(self, tmp_path):
-        from lpacleaner.stages.perspective import PerspectiveStage
+        from ghh.stages.perspective import PerspectiveStage
 
         photo, quad = _make_skewed_page_with_quad(border=80, skew=0.04)
         s4_meta = {"stage": "page_detect", "quad_corners": quad.tolist()}

@@ -14,9 +14,9 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState
-from lpacleaner.stages.deskew import DeskewStage, _projection_profile_angle
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState
+from ghh.stages.deskew import DeskewStage, _projection_profile_angle
 
 from tests.conftest import make_music_page
 
@@ -92,7 +92,7 @@ class TestDeskewStageContract:
         assert issubclass(DeskewStage, BaseStage)
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER
+        from ghh.stages import STAGE_BY_NUMBER
         assert 7 in STAGE_BY_NUMBER
         assert STAGE_BY_NUMBER[7] is DeskewStage
 

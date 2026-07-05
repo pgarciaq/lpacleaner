@@ -1,4 +1,4 @@
-"""TDD tests for lpacleaner.utils.image_io -- written RED (before implementation)."""
+"""TDD tests for ghh.utils.image_io -- written RED (before implementation)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from lpacleaner.utils.image_io import (
+from ghh.utils.image_io import (
     ensure_checkpoint_dir,
     load_image,
     save_checkpoint,

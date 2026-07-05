@@ -13,7 +13,7 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-from lpacleaner.config import Config
+from ghh.config import Config
 
 logger = logging.getLogger(__name__)
 

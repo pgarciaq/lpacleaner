@@ -9,8 +9,8 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import PipelineState
+from ghh.config import Config
+from ghh.pipeline import PipelineState
 from tests.conftest import make_music_page, make_text_page
 
 
@@ -89,28 +89,28 @@ class TestContentAreaStageContract:
     """Verify BaseStage interface compliance."""
 
     def test_has_correct_name(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
         assert ContentAreaStage.name == "content_area"
 
     def test_has_correct_number(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
         assert ContentAreaStage.number == 6
 
     def test_has_correct_checkpoint_name(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
         assert ContentAreaStage.checkpoint_name == "06_content"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.pipeline import BaseStage
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.pipeline import BaseStage
+        from ghh.stages.content_area import ContentAreaStage
         assert issubclass(ContentAreaStage, BaseStage)
 
     def test_error_class_is_skippable(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
         assert ContentAreaStage.error_class == "skippable"
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER
+        from ghh.stages import STAGE_BY_NUMBER
         assert 6 in STAGE_BY_NUMBER
         assert STAGE_BY_NUMBER[6].name == "content_area"
 
@@ -123,7 +123,7 @@ class TestBorderDetection:
     """Test border frame detection via Hough lines."""
 
     def test_detects_border_frame(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page()
@@ -139,7 +139,7 @@ class TestBorderDetection:
         assert h < img.shape[0]
 
     def test_border_rect_is_inside_image(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page(width=1000, height=800)
@@ -153,7 +153,7 @@ class TestBorderDetection:
         assert y + h <= img.shape[0]
 
     def test_output_is_smaller_than_input(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page()
@@ -174,7 +174,7 @@ class TestFallbackDetection:
     """Test fallback methods when no border frame is found."""
 
     def test_no_border_uses_ink_density(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_page_no_border()
@@ -184,7 +184,7 @@ class TestFallbackDetection:
         assert meta["method"] in ("ink_density", "inset_fallback")
 
     def test_uniform_image_uses_inset_fallback(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = np.full((600, 800, 3), (230, 220, 200), dtype=np.uint8)
@@ -194,7 +194,7 @@ class TestFallbackDetection:
         assert meta["method"] == "inset_fallback"
 
     def test_inset_fallback_uses_config_fraction(self):
-        from lpacleaner.stages.content_area import _inset_fallback
+        from ghh.stages.content_area import _inset_fallback
 
         x, y, w, h = _inset_fallback(1000, 800, 0.10)
         assert x == 80
@@ -211,7 +211,7 @@ class TestBlankPagePassthrough:
     """Blank pages should pass through unchanged."""
 
     def test_blank_page_passthrough(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = np.full((600, 800, 3), 200, dtype=np.uint8)
@@ -224,7 +224,7 @@ class TestBlankPagePassthrough:
         np.testing.assert_array_equal(result, img)
 
     def test_blank_page_forwards_page_type(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = np.full((600, 800, 3), 200, dtype=np.uint8)
@@ -242,7 +242,7 @@ class TestFeathering:
     """Test background masking with Gaussian feathering."""
 
     def test_feathering_replaces_outside_pixels(self):
-        from lpacleaner.stages.content_area import _feather_outside
+        from ghh.stages.content_area import _feather_outside
 
         img = np.full((100, 100, 3), (50, 50, 50), dtype=np.uint8)
         img[20:80, 20:80] = (200, 200, 200)
@@ -256,7 +256,7 @@ class TestFeathering:
         assert all(c == 200 for c in center), f"Center should be preserved, got {center}"
 
     def test_feathering_with_sigma_creates_gradient(self):
-        from lpacleaner.stages.content_area import _feather_outside
+        from ghh.stages.content_area import _feather_outside
 
         img = np.full((200, 200, 3), (100, 100, 100), dtype=np.uint8)
         bg = (200, 200, 200)
@@ -276,7 +276,7 @@ class TestMargins:
     """Test margin padding."""
 
     def test_adds_margins(self):
-        from lpacleaner.stages.content_area import _add_margins
+        from ghh.stages.content_area import _add_margins
 
         img = np.full((100, 200, 3), (150, 150, 150), dtype=np.uint8)
         padded, pad_px = _add_margins(img, (200, 200, 200), 0.05)
@@ -287,7 +287,7 @@ class TestMargins:
         assert all(padded[0, 0, c] == 200 for c in range(3))
 
     def test_content_preserved_in_center(self):
-        from lpacleaner.stages.content_area import _add_margins
+        from ghh.stages.content_area import _add_margins
 
         img = np.full((100, 200, 3), (42, 42, 42), dtype=np.uint8)
         padded, pad_px = _add_margins(img, (200, 200, 200), 0.05)
@@ -304,7 +304,7 @@ class TestMetadata:
     """Test metadata output."""
 
     def test_metadata_has_required_fields(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page()
@@ -319,7 +319,7 @@ class TestMetadata:
         assert "background_color" in meta
 
     def test_forwards_page_type(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page()
@@ -329,7 +329,7 @@ class TestMetadata:
         assert meta["page_type"] == "music"
 
     def test_content_rect_is_four_ints(self):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         stage = ContentAreaStage()
         img = _make_bordered_page()
@@ -349,7 +349,7 @@ class TestContentAreaStageRun:
     """Integration tests via BaseStage.run()."""
 
     def test_produces_checkpoint_directory(self, tmp_path):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img = _make_bordered_page()
         input_dir = _setup_stage_input(tmp_path, {"IMG_0001.png": img})
@@ -364,7 +364,7 @@ class TestContentAreaStageRun:
         assert (checkpoint / "IMG_0001.png").exists()
 
     def test_processes_multiple_images(self, tmp_path):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img1 = _make_bordered_page()
         img2 = _make_page_no_border()
@@ -383,7 +383,7 @@ class TestContentAreaStageRun:
         assert (tmp_path / "06_content" / "IMG_0002.png").exists()
 
     def test_writes_metadata_sidecar(self, tmp_path):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img = _make_bordered_page()
         input_dir = _setup_stage_input(tmp_path, {"IMG_0001.png": img})
@@ -400,7 +400,7 @@ class TestContentAreaStageRun:
         assert "content_rect" in meta
 
     def test_resume_skips_completed(self, tmp_path):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img = _make_bordered_page()
         input_dir = _setup_stage_input(tmp_path, {
@@ -418,7 +418,7 @@ class TestContentAreaStageRun:
         assert result2.processed == 0
 
     def test_returns_stage_result(self, tmp_path):
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img = _make_bordered_page()
         input_dir = _setup_stage_input(tmp_path, {"IMG_0001.png": img})
@@ -434,7 +434,7 @@ class TestContentAreaStageRun:
 
     def test_reads_sidecar_from_previous_stage(self, tmp_path):
         """Stage 6 should read page_type from Stage 5 sidecar."""
-        from lpacleaner.stages.content_area import ContentAreaStage
+        from ghh.stages.content_area import ContentAreaStage
 
         img = _make_bordered_page()
         input_dir = _setup_stage_input(tmp_path, {"IMG_0001.png": img})

@@ -14,8 +14,8 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState, StageResult
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState, StageResult
 
 from tests.conftest import make_music_page, add_barrel_distortion
 
@@ -45,27 +45,27 @@ class TestLensCorrectStageContract:
     """Verify that LensCorrectStage satisfies the BaseStage contract."""
 
     def test_has_correct_name(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         assert LensCorrectStage().name == "lens_correct"
 
     def test_has_correct_number(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         assert LensCorrectStage().number == 3
 
     def test_has_correct_checkpoint_name(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         assert LensCorrectStage().checkpoint_name == "03_lens_corrected"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         assert issubclass(LensCorrectStage, BaseStage)
 
     def test_error_class_is_skippable(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         assert LensCorrectStage().error_class == "skippable"
 
@@ -78,7 +78,7 @@ class TestLensCorrectShouldSkip:
     """Test the should_skip logic for LensCorrectStage."""
 
     def test_skips_when_k1_k2_both_zero(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         cfg = Config(input_dir=Path("/tmp"),
@@ -86,7 +86,7 @@ class TestLensCorrectShouldSkip:
         assert stage.should_skip(cfg) is True
 
     def test_does_not_skip_when_k1_nonzero(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         cfg = Config(input_dir=Path("/tmp"),
@@ -94,7 +94,7 @@ class TestLensCorrectShouldSkip:
         assert stage.should_skip(cfg) is False
 
     def test_does_not_skip_when_k2_nonzero(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         cfg = Config(input_dir=Path("/tmp"),
@@ -102,7 +102,7 @@ class TestLensCorrectShouldSkip:
         assert stage.should_skip(cfg) is False
 
     def test_does_not_skip_when_both_nonzero(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         cfg = Config(input_dir=Path("/tmp"),
@@ -118,7 +118,7 @@ class TestLensCorrectProcessImage:
     """Test process_image() for distortion correction."""
 
     def test_preserves_image_dimensions(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         img = make_music_page(width=400, height=300)
@@ -129,7 +129,7 @@ class TestLensCorrectProcessImage:
         assert result.shape == img.shape
 
     def test_metadata_includes_coefficients(self):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         img = make_music_page(width=400, height=300)
@@ -149,7 +149,7 @@ class TestLensCorrectProcessImage:
         Comparison uses the centre 70% of the image to avoid edge
         artifacts from out-of-bounds sampling during distortion.
         """
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         k1 = 0.3
@@ -174,7 +174,7 @@ class TestLensCorrectProcessImage:
 
     def test_corrects_with_both_k1_and_k2(self):
         """Correction with k1+k2 should reduce distortion in the centre."""
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         k1 = 0.2
@@ -191,7 +191,7 @@ class TestLensCorrectProcessImage:
 
     def test_identity_on_undistorted_image(self):
         """With very small k1, image should barely change."""
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         img = make_music_page(width=400, height=300)
@@ -205,7 +205,7 @@ class TestLensCorrectProcessImage:
 
     def test_handles_negative_k1_pincushion(self):
         """Pincushion distortion (k1 < 0) should also be correctable."""
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         stage = LensCorrectStage()
         k1 = -0.2
@@ -229,7 +229,7 @@ class TestLensCorrectProcessImage:
         )
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER, STAGE_BY_NAME
+        from ghh.stages import STAGE_BY_NUMBER, STAGE_BY_NAME
 
         assert 3 in STAGE_BY_NUMBER
         assert "lens_correct" in STAGE_BY_NAME
@@ -244,7 +244,7 @@ class TestLensCorrectStageRun:
     """Integration tests for LensCorrectStage.run()."""
 
     def test_produces_checkpoint_directory(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -259,7 +259,7 @@ class TestLensCorrectStageRun:
         assert (tmp_path / "03_lens_corrected").exists()
 
     def test_processes_all_images(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -279,7 +279,7 @@ class TestLensCorrectStageRun:
         assert len(out_files) == 3
 
     def test_writes_metadata_sidecar(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -299,7 +299,7 @@ class TestLensCorrectStageRun:
         assert meta["k2"] == 0.02
 
     def test_resume_skips_completed(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -317,7 +317,7 @@ class TestLensCorrectStageRun:
         assert result2.processed == 0
 
     def test_returns_stage_result(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),
@@ -333,7 +333,7 @@ class TestLensCorrectStageRun:
         assert result.stage_name == "lens_correct"
 
     def test_skipped_when_no_distortion(self, tmp_path):
-        from lpacleaner.stages.lens_correct import LensCorrectStage
+        from ghh.stages.lens_correct import LensCorrectStage
 
         input_dir = _setup_stage_input(tmp_path, {
             "IMG_0001.png": make_music_page(width=400, height=300),

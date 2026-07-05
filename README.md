@@ -1,6 +1,8 @@
-# LPA Cleaner
+# Guido's Helping Hand (ghh)
 
 A Python pipeline that automatically processes photographed pages of historical music books (Gregorian chant) into searchable PDFs.
+
+Named after the [Guidonian Hand](https://en.wikipedia.org/wiki/Guidonian_hand), the medieval mnemonic device used to teach singers the notes of the musical scale.
 
 Designed for digitizing collections of 15+ books with varying ink colors, photography conditions, and physical condition -- coastal preservation, humidity damage, aging, iron gall corrosion, and more.
 
@@ -48,7 +50,7 @@ brew install tesseract
 Process a directory of book photos into a searchable PDF:
 
 ```bash
-lpacleaner run /path/to/book/photos
+ghh run /path/to/book/photos
 ```
 
 That's it. The pipeline auto-detects book characteristics, runs all 12 stages, and produces a PDF in a sibling output directory.
@@ -57,38 +59,44 @@ That's it. The pipeline auto-detects book characteristics, runs all 12 stages, a
 
 ```bash
 # Specify output directory
-lpacleaner run /path/to/photos -o /path/to/output
+ghh run /path/to/photos -o /path/to/output
 
 # Preview mode -- process only the first 5 images
-lpacleaner run /path/to/photos --preview 5
+ghh run /path/to/photos --preview 5
 
 # Skip specific stages
-lpacleaner run /path/to/photos --skip-dewarp --skip-ocr
+ghh run /path/to/photos --skip-dewarp --skip-ocr
 
 # Use AI-powered dewarping (requires openvino)
-lpacleaner run /path/to/photos --ai-dewarp
+ghh run /path/to/photos --ai-dewarp
 
 # Quick profile (skip optional stages for faster processing)
-lpacleaner run /path/to/photos --profile quick
+ghh run /path/to/photos --profile quick
 
 # Delete intermediate files after successful processing
-lpacleaner run /path/to/photos --cleanup
+ghh run /path/to/photos --cleanup
 ```
 
 ### Other Commands
 
 ```bash
 # Analyze a book and generate book.toml configuration (runs automatically if needed)
-lpacleaner analyze /path/to/photos
+ghh analyze /path/to/photos
 
 # Inspect a single image with diagnostic output
-lpacleaner inspect /path/to/image.jpg
+ghh inspect /path/to/image.jpg
 
 # Review processed output with contact sheets
-lpacleaner review /path/to/output
+ghh review /path/to/output
+
+# Compare pipeline stages locally in the browser
+ghh compare /path/to/output
+
+# Publish a web-friendly comparison site with downscaled JPEGs
+ghh publish /path/to/output /var/www/mybook
 
 # Clean up intermediate checkpoint directories
-lpacleaner cleanup /path/to/output
+ghh cleanup /path/to/output
 ```
 
 ## Pipeline Stages
@@ -124,7 +132,7 @@ output/
   11_ocr/                # hOCR files
   output.pdf             # Final searchable PDF
   pipeline.json          # Stage status and parameters
-  lpacleaner.log         # Detailed processing log
+  ghh.log                # Detailed processing log
 ```
 
 ## Processing Profiles
@@ -146,13 +154,13 @@ pytest
 Run with coverage:
 
 ```bash
-pytest --cov=lpacleaner --cov-report=term-missing
+pytest --cov=ghh --cov-report=term-missing
 ```
 
 Lint:
 
 ```bash
-ruff check lpacleaner tests
+ruff check ghh tests
 ```
 
 ## License

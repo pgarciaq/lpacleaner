@@ -1,4 +1,4 @@
-"""Tests for lpacleaner.compare (compare and publish viewers)."""
+"""Tests for ghh.compare (compare and publish viewers)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from lpacleaner.compare import (
+from ghh.compare import (
     _THEME_COMPARE,
     _THEME_PUBLISH,
     _convert_image,
@@ -452,7 +452,7 @@ class TestCompareCLI:
     def test_compare_generates_html(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import compare
+        from ghh.cli import compare
 
         out, _ = _make_book(
             tmp_path, stages=["00_preprocessed"], stems=["A"],
@@ -466,7 +466,7 @@ class TestCompareCLI:
     def test_compare_with_image_stem(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import compare
+        from ghh.cli import compare
 
         out, _ = _make_book(
             tmp_path, stages=["00_preprocessed"], stems=["A", "B", "C"],
@@ -480,7 +480,7 @@ class TestCompareCLI:
     def test_compare_empty_dir_exits_1(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import compare
+        from ghh.cli import compare
 
         out = tmp_path / "empty"
         out.mkdir()
@@ -494,7 +494,7 @@ class TestPublishCLI:
     def test_publish_creates_site(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import publish
+        from ghh.cli import publish
 
         out, _ = _make_book(
             tmp_path, stages=["00_preprocessed"], stems=["A"],
@@ -512,7 +512,7 @@ class TestPublishCLI:
     def test_publish_with_stage_filter(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import publish
+        from ghh.cli import publish
 
         out, _ = _make_book(
             tmp_path,
@@ -531,7 +531,7 @@ class TestPublishCLI:
     def test_publish_with_max_dim(self, tmp_path: Path):
         from click.testing import CliRunner
 
-        from lpacleaner.cli import publish
+        from ghh.cli import publish
 
         out, _ = _make_book(
             tmp_path, stages=["00_preprocessed"], stems=["A"],

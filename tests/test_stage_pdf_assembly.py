@@ -13,9 +13,9 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage, PipelineState
-from lpacleaner.stages.pdf_assembly import PDFAssemblyStage, _collect_images
+from ghh.config import Config
+from ghh.pipeline import BaseStage, PipelineState
+from ghh.stages.pdf_assembly import PDFAssemblyStage, _collect_images
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -92,7 +92,7 @@ class TestPDFAssemblyStageContract:
             )
 
     def test_registered_in_stage_registry(self):
-        from lpacleaner.stages import STAGE_BY_NUMBER
+        from ghh.stages import STAGE_BY_NUMBER
         assert 12 in STAGE_BY_NUMBER
         assert STAGE_BY_NUMBER[12] is PDFAssemblyStage
 

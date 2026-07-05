@@ -1,11 +1,11 @@
-"""TDD tests for lpacleaner.utils.accel -- GPU/OpenCL detection and UMat wrappers."""
+"""TDD tests for ghh.utils.accel -- GPU/OpenCL detection and UMat wrappers."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from lpacleaner.utils.accel import (
+from ghh.utils.accel import (
     from_umat,
     gpu_canny,
     gpu_clahe,

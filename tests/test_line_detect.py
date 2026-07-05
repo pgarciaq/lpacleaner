@@ -1,4 +1,4 @@
-"""TDD tests for lpacleaner.utils.line_detect -- ink detection, staff lines, foxing filter."""
+"""TDD tests for ghh.utils.line_detect -- ink detection, staff lines, foxing filter."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from tests.conftest import make_music_page, make_text_page
-from lpacleaner.config import Config
-from lpacleaner.utils.line_detect import (
+from ghh.config import Config
+from ghh.utils.line_detect import (
     StaffLine,
     detect_dominant_angle,
     detect_illustration_regions,

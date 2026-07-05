@@ -1,4 +1,4 @@
-# LPA Cleaner -- Technical Implementation Plan
+# Guido's Helping Hand (ghh) -- Technical Implementation Plan
 
 A generic Python pipeline that automatically processes photographed pages of
 historical music books (Gregorian chant) into searchable PDFs. Designed to
@@ -90,7 +90,7 @@ These values serve as defaults; the `analyze` command recalibrates for each book
 ## Project Structure
 
 ```
-lpacleaner/
+ghh/
   pyproject.toml
   PLAN.md
   README.md
@@ -105,7 +105,7 @@ lpacleaner/
     test_stage_*.py            # One file per stage
     test_pipeline.py           # Integration tests
     test_cli.py                # CLI tests
-  lpacleaner/
+  ghh/
     __init__.py
     cli.py                  # Click CLI: analyze, run, inspect, compare commands
     compare.py              # Interactive HTML stage comparison viewer
@@ -160,7 +160,7 @@ output/
   12_pdf/                    output.pdf, output.pdf.json
   13_flipbook/               index.html, pages/, page-flip.browser.js
   pipeline.json                                  (stage status, parameters used)
-  lpacleaner.log                                 (detailed log, always verbose)
+  ghh.log                                 (detailed log, always verbose)
 ```
 
 ---
@@ -170,7 +170,7 @@ output/
 The tool must work out of the box with nothing more than an input directory:
 
 ```bash
-lpacleaner run "/path/to/book/photos"
+ghh run "/path/to/book/photos"
 ```
 
 This single command must:
@@ -216,13 +216,13 @@ and flags affected pages for review.
 ## Analyze Command (`analyze.py`)
 
 Scans sample images and generates a `book.toml` config file with auto-detected
-book characteristics. Runs automatically as part of `lpacleaner run` if no
+book characteristics. Runs automatically as part of `ghh run` if no
 `book.toml` exists, but can also be run separately for manual review/editing.
 
 ### Usage
 
 ```
-lpacleaner analyze INPUT_DIR [--output-dir OUTPUT_DIR] [--samples N]
+ghh analyze INPUT_DIR [--output-dir OUTPUT_DIR] [--samples N]
 ```
 
 `--samples N` overrides the adaptive default. When omitted, analyze samples
@@ -1452,8 +1452,8 @@ title = "LPA 1 - San Nicolás"
 ### CLI integration
 
 ```bash
-lpacleaner flipbook INPUT_DIR -o OUTPUT_DIR    # standalone command
-lpacleaner run INPUT_DIR --stages 0-6,13       # or as part of pipeline
+ghh flipbook INPUT_DIR -o OUTPUT_DIR    # standalone command
+ghh run INPUT_DIR --stages 0-6,13       # or as part of pipeline
 ```
 
 ### Design notes
@@ -1852,30 +1852,30 @@ Loading priority: **CLI args > book.toml > profile defaults > built-in defaults*
 ## CLI Interface (`cli.py`)
 
 ```
-lpacleaner run INPUT_DIR                           # just works
-lpacleaner run INPUT_DIR -o OUTPUT_DIR             # explicit output dir
-lpacleaner run INPUT_DIR --profile geometry        # flatten only
-lpacleaner run INPUT_DIR --profile clean           # no OCR
-lpacleaner run INPUT_DIR --profile quick           # fast preview
-lpacleaner run INPUT_DIR --skip-dewarp --skip-ocr  # selective skip
-lpacleaner run INPUT_DIR --stages 2,3,4,5          # explicit stage list (advanced)
-lpacleaner run INPUT_DIR --preview 5               # process only 5 images
-lpacleaner run INPUT_DIR --ai-dewarp
-lpacleaner run INPUT_DIR --binarize
-lpacleaner run INPUT_DIR --cleanup                 # delete intermediates after success
-lpacleaner run INPUT_DIR --on-error stop           # halt on first failure
-lpacleaner run INPUT_DIR --verbose                 # per-image debug output
-lpacleaner run INPUT_DIR --quiet                   # warnings and errors only
-lpacleaner analyze INPUT_DIR [-o OUTPUT_DIR] [--samples 15]
-lpacleaner inspect IMAGE_PATH [--config book.toml]
-lpacleaner review OUTPUT_DIR [--stage 09_enhanced]
-lpacleaner compare OUTPUT_DIR                       # full-book HTML stage comparison (local)
-lpacleaner compare OUTPUT_DIR IMG_0012              # open at specific image
-lpacleaner compare OUTPUT_DIR --no-open             # generate without opening browser
-lpacleaner compare OUTPUT_DIR --input-dir /path/to/originals
-lpacleaner publish OUTPUT_DIR /var/www/lpa1         # publish with downscaled JPEGs
-lpacleaner publish OUTPUT_DIR pub --stages "0,5,7"  # subset of stages
-lpacleaner cleanup OUTPUT_DIR [--keep 07,09]        # delete intermediates post-hoc
+ghh run INPUT_DIR                           # just works
+ghh run INPUT_DIR -o OUTPUT_DIR             # explicit output dir
+ghh run INPUT_DIR --profile geometry        # flatten only
+ghh run INPUT_DIR --profile clean           # no OCR
+ghh run INPUT_DIR --profile quick           # fast preview
+ghh run INPUT_DIR --skip-dewarp --skip-ocr  # selective skip
+ghh run INPUT_DIR --stages 2,3,4,5          # explicit stage list (advanced)
+ghh run INPUT_DIR --preview 5               # process only 5 images
+ghh run INPUT_DIR --ai-dewarp
+ghh run INPUT_DIR --binarize
+ghh run INPUT_DIR --cleanup                 # delete intermediates after success
+ghh run INPUT_DIR --on-error stop           # halt on first failure
+ghh run INPUT_DIR --verbose                 # per-image debug output
+ghh run INPUT_DIR --quiet                   # warnings and errors only
+ghh analyze INPUT_DIR [-o OUTPUT_DIR] [--samples 15]
+ghh inspect IMAGE_PATH [--config book.toml]
+ghh review OUTPUT_DIR [--stage 09_enhanced]
+ghh compare OUTPUT_DIR                       # full-book HTML stage comparison (local)
+ghh compare OUTPUT_DIR IMG_0012              # open at specific image
+ghh compare OUTPUT_DIR --no-open             # generate without opening browser
+ghh compare OUTPUT_DIR --input-dir /path/to/originals
+ghh publish OUTPUT_DIR /var/www/lpa1         # publish with downscaled JPEGs
+ghh publish OUTPUT_DIR pub --stages "0,5,7"  # subset of stages
+ghh cleanup OUTPUT_DIR [--keep 07,09]        # delete intermediates post-hoc
 ```
 
 ### `compare` command
@@ -1892,7 +1892,7 @@ original input is auto-detected from the `<input>_output` naming
 convention (override with `--input-dir`).
 
 The comparison HTML is also **automatically generated** at the end of
-every `lpacleaner run` invocation.
+every `ghh run` invocation.
 
 The viewer has a **dark blue theme** and displays a "Compare mode"
 badge in the top bar.
@@ -1928,10 +1928,10 @@ distinguishable from the local `compare` viewer.
 
 ```bash
 # Publish all stages at default settings (1500px max, quality 85):
-lpacleaner publish OUTPUT_DIR /var/www/lpa1
+ghh publish OUTPUT_DIR /var/www/lpa1
 
 # Publish only specific stages, smaller images for bandwidth:
-lpacleaner publish OUTPUT_DIR ./pub \
+ghh publish OUTPUT_DIR ./pub \
     --stages "0,5,7" \
     --max-dim 1000 \
     --quality 80
@@ -1965,30 +1965,30 @@ PUBLISH_DIR/
 
 ```bash
 # Simplest usage -- everything automatic:
-lpacleaner run "/path/to/book/photos"
+ghh run "/path/to/book/photos"
 # Auto-detects book characteristics, processes all pages, produces PDF.
 # Output goes to /path/to/book/photos_output/
 
 # Advanced workflow -- review config before processing:
-lpacleaner analyze "/path/to/book/photos"
+ghh analyze "/path/to/book/photos"
 # Review and edit the generated book.toml
 nano "/path/to/book/photos_output/book.toml"
-lpacleaner run "/path/to/book/photos"
+ghh run "/path/to/book/photos"
 
 # Quick preview to check framing before full run:
-lpacleaner run "/path/to/book/photos" --profile quick --preview 5
+ghh run "/path/to/book/photos" --profile quick --preview 5
 
 # Review flagged pages after processing:
-lpacleaner review "/path/to/book/photos_output"
+ghh review "/path/to/book/photos_output"
 
 # Browse all images across all stages (auto-generated after run):
-lpacleaner compare "/path/to/book/photos_output"
+ghh compare "/path/to/book/photos_output"
 
 # Open at a specific image:
-lpacleaner compare "/path/to/book/photos_output" IMG_0012
+ghh compare "/path/to/book/photos_output" IMG_0012
 
 # Publish a web-friendly version for sharing with researchers:
-lpacleaner publish "/path/to/book/photos_output" /var/www/lpa1-compare \
+ghh publish "/path/to/book/photos_output" /var/www/lpa1-compare \
     --stages "0,5,7" \
     --max-dim 1000
 ```
@@ -2011,15 +2011,15 @@ Stage  9 (enhance): 222/225 OK, 3 flagged (high noise residual)
 - If >20% of pages trigger a soft fallback in any stage, the end-of-run
   report emits a `REVIEW` recommendation with specific advice:
   *"Staff line detection had low confidence on 48 pages. Run
-  `lpacleaner inspect IMG_0045.jpg --stage dewarp` to visualize,
+  `ghh inspect IMG_0045.jpg --stage dewarp` to visualize,
   then consider adjusting staff_color_hue in book.toml."*
 
-### Diagnostic Visualization (`lpacleaner inspect`)
+### Diagnostic Visualization (`ghh inspect`)
 
 The `inspect` command renders annotated overlays for each stage:
 
 ```bash
-lpacleaner inspect IMG_0045.jpg --stage dewarp --config book.toml
+ghh inspect IMG_0045.jpg --stage dewarp --config book.toml
 ```
 
 Output: an annotated image showing:
@@ -2038,14 +2038,14 @@ Suggest: staff_color_hue=18, staff_color_range=12."*
 
 ```
 1. First run with defaults (or after analyze):
-   lpacleaner run "/path/to/book/photos"
+   ghh run "/path/to/book/photos"
 
 2. Review quality:
-   lpacleaner review "/path/to/book/photos_output"
+   ghh review "/path/to/book/photos_output"
    → Shows flagged pages, confidence stats, contact sheet
 
 3. Diagnose specific problems:
-   lpacleaner inspect IMG_0045.jpg --stage dewarp
+   ghh inspect IMG_0045.jpg --stage dewarp
    → Shows detection overlay with parameter suggestions
 
 4. Adjust configuration:
@@ -2053,7 +2053,7 @@ Suggest: staff_color_hue=18, staff_color_range=12."*
    → Edit staff_color_hue, thresholds, etc.
 
 5. Re-run (only affected stages reprocess -- cache invalidation):
-   lpacleaner run "/path/to/book/photos"
+   ghh run "/path/to/book/photos"
    → Only stages dependent on changed params are re-run
 ```
 
@@ -2165,7 +2165,7 @@ Processed 222/225 images.
   0 failed stages: all skippable failures recovered
 
 Output: /path/to/output/output.pdf (222 pages, 185 MB)
-Log: /path/to/output/lpacleaner.log
+Log: /path/to/output/ghh.log
 ```
 
 ---
@@ -2195,14 +2195,14 @@ The CLI warns about estimated disk usage before processing starts:
 ```bash
 # Remove intermediate checkpoints after successful completion,
 # keeping only 10_normalized/ (final images) and output.pdf
-lpacleaner run INPUT_DIR --cleanup
+ghh run INPUT_DIR --cleanup
 
 # Keep only specific stages (for debugging a particular stage)
-lpacleaner run INPUT_DIR --keep-stages 02,07,09,10
+ghh run INPUT_DIR --keep-stages 02,07,09,10
 
 # Clean up a completed run after the fact
-lpacleaner cleanup OUTPUT_DIR              # keeps 10_normalized + PDF
-lpacleaner cleanup OUTPUT_DIR --keep 07,09 # keeps specific stages too
+ghh cleanup OUTPUT_DIR              # keeps 10_normalized + PDF
+ghh cleanup OUTPUT_DIR --keep 07,09 # keeps specific stages too
 ```
 
 `--cleanup` deletes each stage's checkpoint directory after the next
@@ -2219,7 +2219,7 @@ Structured logging via Python's `logging` module. Two outputs:
 
 1. **Console** (stderr): human-readable, colorized, progress-focused.
    Controlled by `--verbose` / `--quiet`.
-2. **Log file** (`output/lpacleaner.log`): machine-parseable, always
+2. **Log file** (`output/ghh.log`): machine-parseable, always
    verbose, includes timestamps and per-image details. Rotated at 50MB.
 
 ### Verbosity Levels
@@ -2383,11 +2383,11 @@ OMR requires:
 3. Symbol segmentation and classification (neural network)
 4. Musical context understanding (rhythm, key, clef awareness)
 
-Items 1-2 are exactly what lpacleaner produces. Building the image
+Items 1-2 are exactly what ghh produces. Building the image
 pipeline first gives OMR the best possible input. Attempting OMR on
 raw, skewed, warped, poorly-lit photos would produce poor results.
 
-### How lpacleaner Prepares for OMR
+### How ghh Prepares for OMR
 
 Several design decisions in the current pipeline are intentionally
 OMR-friendly:
@@ -2509,14 +2509,14 @@ and doesn't require as much training data.
 
 No changes needed to the current pipeline for OMR readiness. The
 architecture is already compatible:
-- OMR would be a new Stage 14 (or a separate command `lpacleaner omr`)
+- OMR would be a new Stage 14 (or a separate command `ghh omr`)
 - It consumes Stage 8 output (dewarped images) and Stage 8 metadata
   (staff positions)
 - It runs after the image pipeline, optionally in parallel with
   enhancement/OCR
 - It produces its own output files (GABC) alongside the PDF
 - The augmentation engine for synthetic training data could reuse
-  lpacleaner's own image processing stages (enhance, normalize) in reverse
+  ghh's own image processing stages (enhance, normalize) in reverse
 
 ---
 
@@ -2732,7 +2732,7 @@ PDF is reviewed.
 2. **Flagged pages**: Pages with low confidence in any stage are flagged.
    The CLI reports them at the end: `"3 pages flagged for review: IMG_0060,
    IMG_0080, IMG_0230"`.
-3. **Contact sheet generation**: New `lpacleaner review OUTPUT_DIR` command
+3. **Contact sheet generation**: New `ghh review OUTPUT_DIR` command
    that generates a single image showing thumbnails of all pages from a
    given stage (e.g., `--stage 09_enhanced`), so the user can visually
    scan all 225 pages at once and spot problems.
@@ -2923,7 +2923,7 @@ The missing corners affect multiple stages differently.
 
 ```toml
 [project]
-name = "lpacleaner"
+name = "ghh"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -2943,7 +2943,7 @@ historical-ocr = ["kraken>=5.0"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0"]
 
 [project.scripts]
-lpacleaner = "lpacleaner.cli:main"
+ghh = "ghh.cli:main"
 ```
 
 System packages: `tesseract`, `tesseract-langpack-lat` (via `dnf`)
@@ -3208,7 +3208,7 @@ For each item in the Implementation Order:
 pytest -m "not slow"             # fast tests only (~15s) -- use during TDD
 pytest                           # full suite (all tiers)
 pytest -x                        # stop at first failure
-pytest --cov=lpacleaner          # with coverage report
+pytest --cov=ghh          # with coverage report
 pytest -m slow                   # only slow tests (4000x3000 images)
 pytest -m regression             # only regression tests (real images)
 pytest tests/test_stage_deskew.py  # single test file

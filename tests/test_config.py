@@ -1,4 +1,4 @@
-"""TDD tests for lpacleaner.config -- Config dataclass and TOML loading."""
+"""TDD tests for ghh.config -- Config dataclass and TOML loading."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from lpacleaner.config import Config
+from ghh.config import Config
 
 
 class TestConfigDefaults:

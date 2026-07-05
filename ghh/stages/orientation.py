@@ -35,9 +35,9 @@ import numpy as np
 import pytesseract
 from PIL import Image
 
-from lpacleaner.config import Config
-from lpacleaner.pipeline import BaseStage
-from lpacleaner.utils.line_detect import count_horizontal_lines
+from ghh.config import Config
+from ghh.pipeline import BaseStage
+from ghh.utils.line_detect import count_horizontal_lines
 
 logger = logging.getLogger(__name__)
 

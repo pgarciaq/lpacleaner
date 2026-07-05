@@ -2,9 +2,9 @@
 
 Two commands produce distinct viewers:
 
-* ``lpacleaner compare`` -- local ``file://`` references to PNGs on
+* ``ghh compare`` -- local ``file://`` references to PNGs on
   disk, dark-blue theme, labelled "Compare mode".
-* ``lpacleaner publish`` -- self-contained directory with downscaled
+* ``ghh publish`` -- self-contained directory with downscaled
   JPEGs and relative paths, warm amber theme, labelled with the
   publication timestamp.
 """
@@ -387,7 +387,7 @@ _HTML_TEMPLATE = """\
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>LPA Cleaner — __TITLE__</title>
+<title>Guido's Helping Hand — __TITLE__</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {

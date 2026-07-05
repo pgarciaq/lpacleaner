@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 import pytest
 
-from lpacleaner.config import Config
+from ghh.config import Config
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ class TestGroupDetection:
     """Test ORB-based image grouping logic."""
 
     def test_detects_overlapping_pair(self):
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         images = {"IMG_0001": img_a, "IMG_0002": img_b}
@@ -100,7 +100,7 @@ class TestGroupDetection:
         assert set(groups[0]) == {"IMG_0001", "IMG_0002"}
 
     def test_standalone_images_are_separate_groups(self):
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         img_a = _make_textured_page(seed=1)
         img_b = _make_textured_page(seed=2)
@@ -114,7 +114,7 @@ class TestGroupDetection:
 
     def test_transitive_grouping(self):
         """If A matches B and B matches C, all three form one group."""
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         # Create a chain of 3 overlapping crops from one wide canvas.
         # Each crop is 600px wide with 50% overlap between consecutive crops.
@@ -140,7 +140,7 @@ class TestGroupDetection:
         assert set(groups[0]) == {"IMG_0001", "IMG_0002", "IMG_0003"}
 
     def test_no_stitch_override_prevents_grouping(self):
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         images = {"IMG_0001": img_a, "IMG_0002": img_b}
@@ -155,7 +155,7 @@ class TestGroupDetection:
         assert len(groups) == 2
 
     def test_manual_stitch_groups_override(self):
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         img_a = _make_textured_page(seed=1)
         img_b = _make_textured_page(seed=2)
@@ -173,7 +173,7 @@ class TestGroupDetection:
         assert {"IMG_0003"} in group_sets
 
     def test_returns_sorted_names_within_groups(self):
-        from lpacleaner.utils.stitch import detect_groups
+        from ghh.utils.stitch import detect_groups
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         images = {"IMG_0002": img_b, "IMG_0001": img_a}
@@ -192,19 +192,19 @@ class TestNonContentDetection:
     """Test detection of book covers and non-content images."""
 
     def test_detects_dark_cover(self):
-        from lpacleaner.utils.stitch import is_non_content
+        from ghh.utils.stitch import is_non_content
 
         cover = _make_dark_cover()
         assert is_non_content(cover) is True
 
     def test_content_page_is_not_flagged(self):
-        from lpacleaner.utils.stitch import is_non_content
+        from ghh.utils.stitch import is_non_content
 
         page = _make_textured_page(seed=1)
         assert is_non_content(page) is False
 
     def test_bright_page_is_not_flagged(self):
-        from lpacleaner.utils.stitch import is_non_content
+        from ghh.utils.stitch import is_non_content
 
         page = np.full((400, 600, 3), (220, 230, 240), dtype=np.uint8)
         assert is_non_content(page) is False
@@ -218,7 +218,7 @@ class TestRetakeDedup:
     """Test detection and removal of near-duplicate retakes."""
 
     def test_detects_identical_images_as_retakes(self):
-        from lpacleaner.utils.stitch import deduplicate_retakes
+        from ghh.utils.stitch import deduplicate_retakes
 
         img = _make_textured_page(seed=1)
         group_images = {"IMG_0001": img.copy(), "IMG_0002": img.copy()}
@@ -230,7 +230,7 @@ class TestRetakeDedup:
         assert len(discarded) == 1
 
     def test_keeps_sharper_retake(self):
-        from lpacleaner.utils.stitch import deduplicate_retakes
+        from ghh.utils.stitch import deduplicate_retakes
 
         sharp = _make_textured_page(seed=1)
         blurry = cv2.GaussianBlur(sharp, (15, 15), 5)
@@ -243,7 +243,7 @@ class TestRetakeDedup:
         assert "IMG_0002" in discarded
 
     def test_non_duplicates_are_all_kept(self):
-        from lpacleaner.utils.stitch import deduplicate_retakes
+        from ghh.utils.stitch import deduplicate_retakes
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         group_images = {"IMG_0001": img_a, "IMG_0002": img_b}
@@ -263,7 +263,7 @@ class TestStitching:
     """Test the stitching fallback chain."""
 
     def test_stitches_overlapping_pair(self):
-        from lpacleaner.utils.stitch import stitch_images
+        from ghh.utils.stitch import stitch_images
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         images = {"IMG_0001": img_a, "IMG_0002": img_b}
@@ -277,7 +277,7 @@ class TestStitching:
         assert method in ("panorama", "scans", "homography")
 
     def test_result_is_wider_than_either_input(self):
-        from lpacleaner.utils.stitch import stitch_images
+        from ghh.utils.stitch import stitch_images
 
         img_a, img_b = _make_overlapping_pair(overlap_frac=0.4)
         images = {"IMG_0001": img_a, "IMG_0002": img_b}
@@ -290,7 +290,7 @@ class TestStitching:
             assert result.shape[1] > max(img_a.shape[1], img_b.shape[1]) * 0.9
 
     def test_single_image_returns_itself(self):
-        from lpacleaner.utils.stitch import stitch_images
+        from ghh.utils.stitch import stitch_images
 
         img = _make_textured_page(seed=1)
         images = {"IMG_0001": img}
@@ -304,7 +304,7 @@ class TestStitching:
 
     def test_fallback_to_best_single_on_unmatchable(self):
         """When images have no matchable features, fall back to best single."""
-        from lpacleaner.utils.stitch import stitch_images
+        from ghh.utils.stitch import stitch_images
 
         # Solid-color images with zero ORB features → all stitchers fail
         img_a = np.full((200, 300, 3), (180, 200, 210), dtype=np.uint8)
@@ -327,7 +327,7 @@ class TestFocusMetric:
     """Test focus quality measurement (Laplacian variance)."""
 
     def test_sharp_has_higher_focus_than_blurry(self):
-        from lpacleaner.utils.stitch import compute_focus
+        from ghh.utils.stitch import compute_focus
 
         sharp = _make_textured_page(seed=1)
         blurry = cv2.GaussianBlur(sharp, (21, 21), 7)
@@ -335,7 +335,7 @@ class TestFocusMetric:
         assert compute_focus(sharp) > compute_focus(blurry)
 
     def test_returns_float(self):
-        from lpacleaner.utils.stitch import compute_focus
+        from ghh.utils.stitch import compute_focus
 
         img = _make_textured_page(seed=1)
         assert isinstance(compute_focus(img), float)
@@ -349,7 +349,7 @@ class TestStitchStageContract:
     """Verify StitchStage satisfies the BaseStage contract."""
 
     def test_has_correct_attributes(self):
-        from lpacleaner.stages.stitch import StitchStage
+        from ghh.stages.stitch import StitchStage
 
         stage = StitchStage()
         assert stage.name == "stitch"
@@ -358,8 +358,8 @@ class TestStitchStageContract:
         assert stage.error_class == "skippable"
 
     def test_is_base_stage_subclass(self):
-        from lpacleaner.pipeline import BaseStage
-        from lpacleaner.stages.stitch import StitchStage
+        from ghh.pipeline import BaseStage
+        from ghh.stages.stitch import StitchStage
 
         assert issubclass(StitchStage, BaseStage)
 
@@ -370,8 +370,8 @@ class TestStitchStageRun:
 
     def test_standalone_images_pass_through(self, tmp_path):
         """When all images are standalone (no overlaps), they pass through."""
-        from lpacleaner.pipeline import PipelineState
-        from lpacleaner.stages.stitch import StitchStage
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
 
         input_dir = tmp_path / "00_preprocessed"
         input_dir.mkdir()
@@ -392,8 +392,8 @@ class TestStitchStageRun:
 
     def test_excluded_images_not_in_output(self, tmp_path):
         """Images in exclude list should be omitted from output."""
-        from lpacleaner.pipeline import PipelineState
-        from lpacleaner.stages.stitch import StitchStage
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
 
         input_dir = tmp_path / "00_preprocessed"
         input_dir.mkdir()
@@ -418,8 +418,8 @@ class TestStitchStageRun:
         assert "IMG_0003" in out_files
 
     def test_writes_metadata_sidecars(self, tmp_path):
-        from lpacleaner.pipeline import PipelineState
-        from lpacleaner.stages.stitch import StitchStage
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
 
         input_dir = tmp_path / "00_preprocessed"
         input_dir.mkdir()
