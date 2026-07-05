@@ -58,6 +58,7 @@ physical condition (coastal preservation, humidity damage, aging).
 | 19 | Stage 11 (OCR) | Pending | | |
 | 20 | Stage 12 (PDF assembly) | **Done** | 35 tests | img2pdf; JPEG/PNG compression; case-insensitive; DPI layout; resume; exclude; 224-page LPA-1 PDF (311.9 MB) |
 | 21 | Stage 13 (flipbook export) | Pending | | |
+| -- | `compare` CLI command | **Done** | -- | Full-book HTML viewer; PgUp/PgDn image nav; side-by-side; auto-generated after `run` |
 | 22 | Pipeline orchestrator | Pending | | |
 | 23 | CLI polish | Pending | | |
 | 24 | Integration tests | Pending | | |
@@ -105,7 +106,8 @@ lpacleaner/
     test_cli.py                # CLI tests
   lpacleaner/
     __init__.py
-    cli.py                  # Click CLI: analyze, run, inspect commands
+    cli.py                  # Click CLI: analyze, run, inspect, compare commands
+    compare.py              # Interactive HTML stage comparison viewer
     pipeline.py             # Orchestrator: run stages, manage checkpoints
     config.py               # Dataclass with all parameters + TOML loading
     stages/
@@ -1866,7 +1868,96 @@ lpacleaner run INPUT_DIR --quiet                   # warnings and errors only
 lpacleaner analyze INPUT_DIR [-o OUTPUT_DIR] [--samples 15]
 lpacleaner inspect IMAGE_PATH [--config book.toml]
 lpacleaner review OUTPUT_DIR [--stage 09_enhanced]
-lpacleaner cleanup OUTPUT_DIR [--keep 07,09]       # delete intermediates post-hoc
+lpacleaner compare OUTPUT_DIR                       # full-book HTML stage comparison (local)
+lpacleaner compare OUTPUT_DIR IMG_0012              # open at specific image
+lpacleaner compare OUTPUT_DIR --no-open             # generate without opening browser
+lpacleaner compare OUTPUT_DIR --input-dir /path/to/originals
+lpacleaner publish OUTPUT_DIR /var/www/lpa1         # publish with downscaled JPEGs
+lpacleaner publish OUTPUT_DIR pub --stages "0,5,7"  # subset of stages
+lpacleaner cleanup OUTPUT_DIR [--keep 07,09]        # delete intermediates post-hoc
+```
+
+### `compare` command
+
+Generates a single interactive HTML viewer for the entire book, showing
+all images across all executed pipeline stages.  Purely local: uses
+`file://` references to existing PNGs on disk (no copies, no conversion),
+so the HTML is lightweight (~400 KB for a 225-image book) and images
+load on demand.
+
+The output directory is scanned for all `NN_*` checkpoint directories
+that actually exist (only stages that were run are included); the
+original input is auto-detected from the `<input>_output` naming
+convention (override with `--input-dir`).
+
+The comparison HTML is also **automatically generated** at the end of
+every `lpacleaner run` invocation.
+
+The viewer has a **dark blue theme** and displays a "Compare mode"
+badge in the top bar.
+
+Keyboard shortcuts (shared with `publish` viewer):
+
+| Key | Action |
+|-----|--------|
+| ← → | Previous / next stage (same image) |
+| PgUp / PgDn | Previous / next image (resets to stage 0) |
+| S | Toggle side-by-side mode |
+| M | Toggle metadata panel (sidecar JSON) |
+| Z | Toggle 100% zoom |
+| 1-9 | Jump directly to stage N |
+
+The top bar shows the current image name, a counter (e.g. "IMG_0050 --
+40 / 225"), Prev/Next buttons, and a dropdown to jump to any image.
+
+Side-by-side mode lets you pick a different stage in each pane for
+direct visual comparison.  The metadata panel shows the JSON sidecar
+(e.g. skew angle, detection method, page type).
+
+### `publish` command
+
+Generates a self-contained directory with downscaled JPEG thumbnails,
+suitable for uploading to any static web host (GitHub Pages, Netlify,
+an S3 bucket, etc.).  Uses relative paths so the whole folder can be
+uploaded as-is.
+
+The viewer has a **warm amber theme** and displays a "Published
+YYYY-MM-DD HH:MM UTC" badge in the top bar, so it's immediately
+distinguishable from the local `compare` viewer.
+
+```bash
+# Publish all stages at default settings (1500px max, quality 85):
+lpacleaner publish OUTPUT_DIR /var/www/lpa1
+
+# Publish only specific stages, smaller images for bandwidth:
+lpacleaner publish OUTPUT_DIR ./pub \
+    --stages "0,5,7" \
+    --max-dim 1000 \
+    --quality 80
+```
+
+Options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `PUBLISH_DIR` | (required) | Target directory for the published site |
+| `--max-dim` | 1500 | Max pixel dimension (longest side) for JPEGs |
+| `--quality` | 85 | JPEG compression quality (1-100) |
+| `--stages` | all | Comma-separated stage numbers to include |
+| `--input-dir` | auto | Override original input directory |
+
+Output structure:
+
+```
+PUBLISH_DIR/
+├── index.html           # self-contained viewer (relative paths)
+└── images/
+    ├── original/        # input images
+    │   ├── IMG_0011.jpg
+    │   └── ...
+    ├── 00_preprocessed/
+    ├── 05_perspective/
+    └── 07_deskewed/
 ```
 
 ### Workflow for a new book
@@ -1888,6 +1979,17 @@ lpacleaner run "/path/to/book/photos" --profile quick --preview 5
 
 # Review flagged pages after processing:
 lpacleaner review "/path/to/book/photos_output"
+
+# Browse all images across all stages (auto-generated after run):
+lpacleaner compare "/path/to/book/photos_output"
+
+# Open at a specific image:
+lpacleaner compare "/path/to/book/photos_output" IMG_0012
+
+# Publish a web-friendly version for sharing with researchers:
+lpacleaner publish "/path/to/book/photos_output" /var/www/lpa1-compare \
+    --stages "0,5,7" \
+    --max-dim 1000
 ```
 
 ---

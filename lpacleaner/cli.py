@@ -10,6 +10,8 @@ import click
 
 from lpacleaner import __version__
 
+logger = logging.getLogger(__name__)
+
 
 @click.group()
 @click.version_option(version=__version__)
@@ -131,6 +133,13 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
 
     click.echo(f"Done. {total_processed} images processed, {total_failed} failures.")
 
+    try:
+        from lpacleaner.compare import write_compare_html
+        html_path = write_compare_html(output_path, input_path)
+        click.echo(f"Comparison viewer: {html_path}")
+    except Exception as exc:
+        logger.debug("Could not generate comparison HTML: %s", exc)
+
     if total_failed and on_error == "stop":
         sys.exit(1)
 
@@ -194,6 +203,107 @@ def inspect(image_path, config):
 def review(output_dir, stage):
     """Review processed pages and generate contact sheet."""
     click.echo(f"Reviewing {output_dir}...")
+
+
+@main.command()
+@click.argument("output_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("image_stem", type=str, required=False, default=None)
+@click.option("--input-dir", type=click.Path(exists=True, file_okay=False), default=None,
+              help="Original input directory (auto-detected if <input>_output convention)")
+@click.option("--no-open", is_flag=True, help="Don't open the browser automatically")
+def compare(output_dir, image_stem, input_dir, no_open):
+    """Compare all pipeline stages locally in the browser.
+
+    Generates an interactive HTML viewer with all images and all
+    checkpoint stages, using file:// references to existing PNGs on
+    disk (no copies, no conversion).
+
+    Use PgUp/PgDn to navigate between images, Left/Right arrows to
+    switch stages, and S for side-by-side mode.
+
+    If IMAGE_STEM is provided (e.g. IMG_0012), the viewer opens at
+    that image.  Otherwise it starts at the first image.
+    """
+    from lpacleaner.compare import discover_book, generate_compare_html, infer_input_dir
+
+    output_path = Path(output_dir)
+
+    if input_dir is not None:
+        input_path = Path(input_dir)
+    else:
+        input_path = infer_input_dir(output_path)
+
+    book = discover_book(output_path, input_path)
+
+    if not book["images"]:
+        click.echo(f"No images found in {output_dir}", err=True)
+        sys.exit(1)
+
+    stem = Path(image_stem).stem if image_stem else None
+
+    click.echo(
+        f"Found {len(book['images'])} images across "
+        f"{len(book['stages'])} stages"
+    )
+
+    html = generate_compare_html(output_path, input_path, stem)
+    html_path = output_path / "compare.html"
+    html_path.write_text(html)
+    click.echo(f"Wrote {html_path}")
+
+    if not no_open:
+        import webbrowser
+        webbrowser.open(f"file://{html_path.resolve()}")
+
+
+@main.command()
+@click.argument("output_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("publish_dir", type=click.Path(file_okay=False))
+@click.option("--input-dir", type=click.Path(exists=True, file_okay=False), default=None,
+              help="Original input directory (auto-detected if <input>_output convention)")
+@click.option("--max-dim", type=int, default=1500,
+              help="Max pixel dimension for JPEGs (default: 1500)")
+@click.option("--quality", type=int, default=85,
+              help="JPEG compression quality (default: 85)")
+@click.option("--stages", "stage_spec", type=str, default=None,
+              help="Comma-separated stage numbers to include (e.g. '0,5,7')")
+@click.option("--no-open", is_flag=True, help="Don't open the browser automatically")
+def publish(output_dir, publish_dir, input_dir, max_dim, quality, stage_spec, no_open):
+    """Publish a web-friendly comparison site with downscaled JPEGs.
+
+    Converts all pipeline stage images to downscaled JPEGs and writes
+    them to PUBLISH_DIR alongside an index.html viewer.  The result
+    is a self-contained directory ready for static web hosting
+    (GitHub Pages, Netlify, S3, etc.).
+    """
+    from lpacleaner.compare import infer_input_dir, publish_book
+
+    output_path = Path(output_dir)
+
+    if input_dir is not None:
+        input_path = Path(input_dir)
+    else:
+        input_path = infer_input_dir(output_path)
+
+    stage_filter = None
+    if stage_spec:
+        stage_filter = {s.strip().zfill(2) for s in stage_spec.split(",")}
+        stage_filter.add("orig")
+
+    click.echo("Publishing comparison site with downscaled JPEGs...")
+    html_path = publish_book(
+        output_path,
+        Path(publish_dir),
+        input_dir=input_path,
+        max_dim=max_dim,
+        quality=quality,
+        stage_filter=stage_filter,
+    )
+    click.echo(f"Published to {html_path.parent}")
+
+    if not no_open:
+        import webbrowser
+        webbrowser.open(f"file://{html_path.resolve()}")
 
 
 @main.command(name="cleanup")
