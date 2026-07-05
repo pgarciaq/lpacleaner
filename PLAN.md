@@ -2880,7 +2880,7 @@ on synthetic images:
 6. ~~**config.py**~~: ✅ Config dataclass with all params, TOML loading, profile resolution, stitch params
 7. ~~**Stage 0** (preprocess)~~: ✅ wire preprocess.py into BaseStage (18 tests)
 8. ~~**Stage 1** (stitch)~~: ✅ grouping, stitching fallback chain, retake dedup, non-content detection (23 tests)
-9. **stages/analyze.py**: auto-detect book characteristics, generate book.toml, adaptive sampling, coarse orientation, simplified quad detection, median-based robustness
+9. ~~**stages/analyze.py**~~: ✅ auto-detect book characteristics, generate book.toml, adaptive sampling, coarse orientation, simplified quad detection, median-based robustness (18 tests)
 10. ~~**Stage 2** (orientation)~~: ✅ content-based axis detection (HoughLinesP) + staff-area validation + cascading polarity (Tesseract OSD standard + adaptive, red title edges, spine S/V) + focus QA (31 tests, 224/224 on LPA-1)
 11. ~~**Real image smoke test**~~: ✅ Stages 0-1-2 on full LPA-1 set (225 images), visual inspection confirmed 224/224 correct orientation
 12. **Stage 3** (lens correct, optional): radial distortion correction (R7) -- simple
