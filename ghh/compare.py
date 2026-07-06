@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -236,10 +238,9 @@ def publish_book(
     images_dir = publish_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
-    images = []
-    total = 0
-    for stem in tqdm(stems, desc="Publishing", unit="img"):
+    def _process_stem(stem: str) -> dict | None:
         stage_entries: list[dict | None] = []
+        count = 0
         for folder_name, src_dir in stage_dirs:
             entry = _convert_image(
                 src_dir, stem, images_dir, folder_name,
@@ -247,10 +248,22 @@ def publish_book(
             )
             stage_entries.append(entry)
             if entry is not None:
-                total += 1
-
+                count += 1
         if any(e is not None for e in stage_entries):
-            images.append({"stem": stem, "stages": stage_entries})
+            return {"stem": stem, "stages": stage_entries, "_n": count}
+        return None
+
+    images = []
+    total = 0
+    n_workers = max(1, (os.cpu_count() or 2) // 2)
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for result in tqdm(
+            pool.map(_process_stem, stems),
+            total=len(stems), desc="Publishing", unit="img",
+        ):
+            if result is not None:
+                total += result.pop("_n")
+                images.append(result)
 
     book = {"stages": stage_labels, "images": images}
     book_js = json.dumps(book, indent=None, separators=(",", ":"))
