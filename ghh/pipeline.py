@@ -15,7 +15,9 @@ import json
 import logging
 import os
 import shutil
+import threading
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -187,6 +189,7 @@ class BaseStage(ABC):
         cfg: Config,
         state: PipelineState,
         progress_callback: callable | None = None,
+        max_workers: int = 1,
     ) -> StageResult:
         """Run the stage on all images in input_dir.
 
@@ -195,6 +198,7 @@ class BaseStage(ABC):
         - Error handling: applies error_class policy per image
         - Atomic checkpoint writes via save_checkpoint()
         - Metadata sidecar output
+        - Parallel processing when *max_workers* > 1
         """
         stage_dir = ensure_checkpoint_dir(output_dir, self.checkpoint_name)
         result = StageResult(stage_name=self.name)
@@ -204,75 +208,148 @@ class BaseStage(ABC):
             if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".tiff", ".tif")
         )
 
-        for img_path in image_files:
-            stem = img_path.stem
+        if max_workers > 1:
+            lock = threading.Lock()
+            fatal_exc: BaseException | None = None
 
-            if state.is_image_done(self.checkpoint_name, stem):
-                out_path = stage_dir / f"{stem}.png"
-                if out_path.exists():
-                    result.skipped += 1
-                    if progress_callback is not None:
-                        progress_callback()
-                    continue
-
-            try:
-                img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
-                if img is None:
-                    raise OSError(f"Cannot read image: {img_path}")
-
-                metadata: dict = {}
-                sidecar_path = img_path.with_suffix(".json")
-                if sidecar_path.exists():
-                    try:
-                        metadata = json.loads(sidecar_path.read_text())
-                    except (json.JSONDecodeError, ValueError, TypeError):
-                        logger.debug("Could not read sidecar %s", sidecar_path)
-
-                processed_img, metadata = self.process_image(img, metadata, cfg)
-
-                if self.writes_image:
-                    save_checkpoint(
-                        processed_img, stage_dir, stem,
-                        metadata=metadata or None,
-                    )
-                else:
-                    out_png = stage_dir / f"{stem}.png"
-                    if out_png.is_symlink() or out_png.exists():
-                        out_png.unlink()
-                    out_png.symlink_to(img_path.resolve())
-                    if metadata:
-                        sidecar = stage_dir / f"{stem}.json"
-                        sidecar.write_text(
-                            json.dumps(metadata, indent=2, default=str),
-                        )
-                state.mark_image_done(self.checkpoint_name, stem)
-                result.processed += 1
-                if progress_callback is not None:
-                    progress_callback()
-
-            except Exception as exc:
-                logger.error(
-                    "Stage %s failed on %s: %s", self.name, stem, exc,
-                    exc_info=True,
+            def _worker(img_path: Path) -> None:
+                nonlocal fatal_exc
+                self._process_one(
+                    img_path, stage_dir, cfg, state, result,
+                    lock, progress_callback,
                 )
 
-                if self.error_class == "skippable":
+            workers = min(max_workers, len(image_files) or 1)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {
+                    pool.submit(_worker, p): p for p in image_files
+                }
+                for fut in as_completed(futures):
                     try:
-                        original = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
-                        if original is not None:
-                            save_checkpoint(original, stage_dir, stem)
-                            state.mark_image_done(self.checkpoint_name, stem)
-                    except Exception:
-                        pass
-                    result.failed += 1
+                        fut.result()
+                    except Exception as exc:
+                        if self.error_class == "fatal":
+                            fatal_exc = exc
+                            for f in futures:
+                                f.cancel()
+                            break
 
-                elif self.error_class == "critical":
-                    result.excluded += 1
-
-                elif self.error_class == "fatal":
-                    raise
-
-                if progress_callback is not None:
-                    progress_callback()
+            if fatal_exc is not None:
+                raise fatal_exc
+        else:
+            for img_path in image_files:
+                self._process_one(
+                    img_path, stage_dir, cfg, state, result,
+                    None, progress_callback,
+                )
 
         return result
+
+    def _process_one(
+        self,
+        img_path: Path,
+        stage_dir: Path,
+        cfg: Config,
+        state: PipelineState,
+        result: StageResult,
+        lock: threading.Lock | None,
+        progress_callback: callable | None,
+    ) -> None:
+        """Process a single image. Thread-safe when *lock* is provided."""
+        stem = img_path.stem
+
+        if state.is_image_done(self.checkpoint_name, stem):
+            out_path = stage_dir / f"{stem}.png"
+            if out_path.exists():
+                if lock:
+                    with lock:
+                        result.skipped += 1
+                else:
+                    result.skipped += 1
+                if progress_callback is not None:
+                    progress_callback()
+                return
+
+        try:
+            img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise OSError(f"Cannot read image: {img_path}")
+
+            metadata: dict = {}
+            sidecar_path = img_path.with_suffix(".json")
+            if sidecar_path.exists():
+                try:
+                    metadata = json.loads(sidecar_path.read_text())
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    logger.debug("Could not read sidecar %s", sidecar_path)
+
+            processed_img, metadata = self.process_image(img, metadata, cfg)
+
+            if self.writes_image:
+                save_checkpoint(
+                    processed_img, stage_dir, stem,
+                    metadata=metadata or None,
+                )
+            else:
+                out_png = stage_dir / f"{stem}.png"
+                if out_png.is_symlink() or out_png.exists():
+                    out_png.unlink()
+                out_png.symlink_to(img_path.resolve())
+                if metadata:
+                    sidecar = stage_dir / f"{stem}.json"
+                    sidecar.write_text(
+                        json.dumps(metadata, indent=2, default=str),
+                    )
+
+            if lock:
+                with lock:
+                    state.mark_image_done(self.checkpoint_name, stem)
+                    result.processed += 1
+            else:
+                state.mark_image_done(self.checkpoint_name, stem)
+                result.processed += 1
+            if progress_callback is not None:
+                progress_callback()
+
+        except Exception as exc:
+            logger.error(
+                "Stage %s failed on %s: %s", self.name, stem, exc,
+                exc_info=True,
+            )
+
+            if self.error_class == "skippable":
+                try:
+                    original = cv2.imread(
+                        str(img_path), cv2.IMREAD_UNCHANGED,
+                    )
+                    if original is not None:
+                        save_checkpoint(original, stage_dir, stem)
+                        if lock:
+                            with lock:
+                                state.mark_image_done(
+                                    self.checkpoint_name, stem,
+                                )
+                        else:
+                            state.mark_image_done(
+                                self.checkpoint_name, stem,
+                            )
+                except Exception:
+                    pass
+                if lock:
+                    with lock:
+                        result.failed += 1
+                else:
+                    result.failed += 1
+
+            elif self.error_class == "critical":
+                if lock:
+                    with lock:
+                        result.excluded += 1
+                else:
+                    result.excluded += 1
+
+            elif self.error_class == "fatal":
+                raise
+
+            if progress_callback is not None:
+                progress_callback()

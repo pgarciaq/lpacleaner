@@ -134,7 +134,7 @@ def save_checkpoint(
     final_path = stage_dir / f"{stem}.png"
     tmp_path = stage_dir / f"{stem}.tmp.png"
 
-    cv2.imwrite(str(tmp_path), img)
+    cv2.imwrite(str(tmp_path), img, [cv2.IMWRITE_PNG_COMPRESSION, 1])
     os.replace(str(tmp_path), str(final_path))
 
     if metadata is not None:

@@ -47,6 +47,7 @@ class StitchStage(BaseStage):
         cfg: Config,
         state: PipelineState,
         progress_callback: callable | None = None,
+        max_workers: int = 1,
     ) -> StageResult:
         stage_dir = ensure_checkpoint_dir(output_dir, self.checkpoint_name)
         result = StageResult(stage_name=self.name)

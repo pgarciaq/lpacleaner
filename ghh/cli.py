@@ -56,16 +56,21 @@ def stages():
 @click.option("--binarize", is_flag=True)
 @click.option("--cleanup", is_flag=True, help="Delete intermediate checkpoints after success")
 @click.option("--on-error", type=click.Choice(["skip", "stop", "force"]), default="skip")
+@click.option("-j", "--jobs", type=int, default=None,
+              help="Parallel workers per stage (default: half of CPU cores, 1=sequential)")
 @click.option("-v", "--verbose", is_flag=True)
 @click.option("-q", "--quiet", is_flag=True)
 def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
         skip_dewarp, skip_deskew, skip_enhance, skip_normalize, skip_ocr,
-        skip_content_area, ai_dewarp, binarize, cleanup, on_error, verbose, quiet):
+        skip_content_area, ai_dewarp, binarize, cleanup, on_error, jobs,
+        verbose, quiet):
     """Process book page photos through the pipeline.
 
     Runs all implemented stages by default.  Use --stages to select specific
     stages (e.g. ``--stages 0-2`` for preprocess, stitch, orientation).
     """
+    import os
+
     from tqdm import tqdm
 
     from ghh.config import Config
@@ -73,6 +78,10 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
     from ghh.stages import get_stages, parse_stage_spec
 
     _configure_logging(verbose, quiet)
+
+    if jobs is None:
+        jobs = max(1, (os.cpu_count() or 2) // 2)
+    jobs = max(1, jobs)
 
     input_path = Path(input_dir)
     if output_dir is None:
@@ -144,6 +153,7 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
         result = stage.run(
             stage_input, output_path, cfg, state,
             progress_callback=bar.update,
+            max_workers=jobs,
         )
         bar.close()
         state.record_result(result)

@@ -74,6 +74,7 @@ class PDFAssemblyStage(BaseStage):
         cfg: Config,
         state: PipelineState,
         progress_callback: callable | None = None,
+        max_workers: int = 1,
     ) -> StageResult:
         result = StageResult(stage_name=self.name)
         output_dir = Path(output_dir)
