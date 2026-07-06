@@ -99,7 +99,7 @@ class Config:
 
     # Content area detection (Stage 6)
     content_detect_inset_fallback: float = 0.05
-    content_margin_padding: float = 0.02
+    content_margin_padding: float = 0.0
     content_feather_sigma: int = 20
 
     # Deskew (Stage 7)
