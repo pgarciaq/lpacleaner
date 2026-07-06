@@ -172,12 +172,21 @@ class BaseStage(ABC):
         """Whether this stage should be skipped entirely (profile/flags)."""
         return cfg.should_skip_stage(self.name)
 
+    @staticmethod
+    def count_images(input_dir: Path) -> int:
+        """Count processable images in *input_dir*."""
+        return sum(
+            1 for p in Path(input_dir).iterdir()
+            if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".tiff", ".tif")
+        )
+
     def run(
         self,
         input_dir: Path,
         output_dir: Path,
         cfg: Config,
         state: PipelineState,
+        progress_callback: callable | None = None,
     ) -> StageResult:
         """Run the stage on all images in input_dir.
 
@@ -202,6 +211,8 @@ class BaseStage(ABC):
                 out_path = stage_dir / f"{stem}.png"
                 if out_path.exists():
                     result.skipped += 1
+                    if progress_callback is not None:
+                        progress_callback()
                     continue
 
             try:
@@ -236,6 +247,8 @@ class BaseStage(ABC):
                         )
                 state.mark_image_done(self.checkpoint_name, stem)
                 result.processed += 1
+                if progress_callback is not None:
+                    progress_callback()
 
             except Exception as exc:
                 logger.error(
@@ -244,7 +257,6 @@ class BaseStage(ABC):
                 )
 
                 if self.error_class == "skippable":
-                    # Pass through the original image unchanged
                     try:
                         original = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
                         if original is not None:
@@ -259,5 +271,8 @@ class BaseStage(ABC):
 
                 elif self.error_class == "fatal":
                     raise
+
+                if progress_callback is not None:
+                    progress_callback()
 
         return result

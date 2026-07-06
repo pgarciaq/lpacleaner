@@ -52,10 +52,13 @@ class PageDetectStage(BaseStage):
     checkpoint_name = "04_page_detected"
     error_class = "skippable"
 
-    def run(self, input_dir, output_dir, cfg, state):
+    def run(self, input_dir, output_dir, cfg, state, progress_callback=None):
         if cfg.minimize_diskspace:
             self.writes_image = False
-        return super().run(input_dir, output_dir, cfg, state)
+        return super().run(
+            input_dir, output_dir, cfg, state,
+            progress_callback=progress_callback,
+        )
 
     def process_image(
         self,

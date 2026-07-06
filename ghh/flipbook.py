@@ -16,6 +16,7 @@ from importlib import resources
 from pathlib import Path
 
 import cv2
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,10 @@ def generate_flipbook(
     page_paths: list[str] = []
     dimensions: list[tuple[int, int]] = []
 
-    for i, src in enumerate(source_images, start=1):
+    for i, src in enumerate(
+        tqdm(source_images, desc="Flipbook pages", unit="pg"),
+        start=1,
+    ):
         dst = pages_dir / f"{i:03d}.jpg"
         w, h = _downscale_image(src, dst, max_width, jpeg_quality)
         page_paths.append(f"pages/{dst.name}")

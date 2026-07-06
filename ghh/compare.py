@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ def discover_book(
     stems = sorted(all_stems)
 
     images = []
-    for stem in stems:
+    for stem in tqdm(stems, desc="Scanning images", unit="img"):
         stage_entries: list[dict | None] = []
         for d in stage_dirs:
             entry = _find_image_entry(d, stem) if d else None
@@ -237,7 +238,7 @@ def publish_book(
 
     images = []
     total = 0
-    for stem in stems:
+    for stem in tqdm(stems, desc="Publishing", unit="img"):
         stage_entries: list[dict | None] = []
         for folder_name, src_dir in stage_dirs:
             entry = _convert_image(

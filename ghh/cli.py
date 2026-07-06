@@ -66,8 +66,10 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
     Runs all implemented stages by default.  Use --stages to select specific
     stages (e.g. ``--stages 0-2`` for preprocess, stitch, orientation).
     """
+    from tqdm import tqdm
+
     from ghh.config import Config
-    from ghh.pipeline import PipelineState
+    from ghh.pipeline import BaseStage, PipelineState
     from ghh.stages import get_stages, parse_stage_spec
 
     _configure_logging(verbose, quiet)
@@ -133,9 +135,17 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
                 continue
             stage_input = prev
 
-        click.echo(f"  Running stage {stage.number} ({stage.name})...")
-
-        result = stage.run(stage_input, output_path, cfg, state)
+        n_images = BaseStage.count_images(stage_input)
+        desc = f"Stage {stage.number} {stage.name}"
+        bar = tqdm(
+            total=n_images, desc=desc, unit="img",
+            disable=quiet, leave=True,
+        )
+        result = stage.run(
+            stage_input, output_path, cfg, state,
+            progress_callback=bar.update,
+        )
+        bar.close()
         state.record_result(result)
         state.save()
 

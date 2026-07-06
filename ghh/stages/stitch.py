@@ -46,6 +46,7 @@ class StitchStage(BaseStage):
         output_dir: Path,
         cfg: Config,
         state: PipelineState,
+        progress_callback: callable | None = None,
     ) -> StageResult:
         stage_dir = ensure_checkpoint_dir(output_dir, self.checkpoint_name)
         result = StageResult(stage_name=self.name)
@@ -97,6 +98,8 @@ class StitchStage(BaseStage):
                 out_path = stage_dir / f"{output_stem}.png"
                 if out_path.exists():
                     result.skipped += 1
+                    if progress_callback is not None:
+                        progress_callback()
                     continue
 
             try:
@@ -134,6 +137,8 @@ class StitchStage(BaseStage):
 
                 state.mark_image_done(self.checkpoint_name, output_stem)
                 result.processed += 1
+                if progress_callback is not None:
+                    progress_callback()
 
             except Exception as exc:
                 logger.error(
@@ -149,5 +154,7 @@ class StitchStage(BaseStage):
                 except Exception:
                     pass
                 result.failed += 1
+                if progress_callback is not None:
+                    progress_callback()
 
         return result

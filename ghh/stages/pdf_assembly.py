@@ -73,6 +73,7 @@ class PDFAssemblyStage(BaseStage):
         output_dir: Path,
         cfg: Config,
         state: PipelineState,
+        progress_callback: callable | None = None,
     ) -> StageResult:
         result = StageResult(stage_name=self.name)
         output_dir = Path(output_dir)
@@ -130,6 +131,8 @@ class PDFAssemblyStage(BaseStage):
 
         state.mark_image_done(self.checkpoint_name, "output")
         result.processed = len(image_files)
+        if progress_callback is not None:
+            progress_callback()
 
         logger.info(
             "PDF assembled: %d pages, %s compression, %.1f MB",
