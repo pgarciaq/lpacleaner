@@ -1,0 +1,432 @@
+{{ define "main" }}
+
+<!-- ===== Navigation ===== -->
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">Guido's Helping Hand</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#compare">Before &amp; After</a></li>
+      <li><a href="#pipeline">Pipeline</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#start">Get Started</a></li>
+      <li><a href="{{ .Site.Params.githubRepo }}" target="_blank">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ===== Hero ===== -->
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <h1>Guido's <span class="accent">Helping Hand</span></h1>
+    <p class="tagline">In the tradition of Guido d'Arezzo, who gave music its notation</p>
+    <p class="description">
+      An open-source tool that automatically processes photographed pages
+      of historical music books&mdash;Gregorian chant, antiphonaries, graduals&mdash;into
+      clean, corrected, searchable PDFs. Built for conservationists, scholars,
+      musicians, and anyone who cherishes the <em>cantus</em>.
+    </p>
+    <div class="hero-buttons">
+      <a href="{{ .Site.Params.githubRepo }}" class="btn btn-primary" target="_blank">
+        View on GitHub
+      </a>
+      <a href="{{ "flipbook/" | relURL }}" class="btn btn-secondary" target="_blank">
+        Browse the Flipbook
+      </a>
+    </div>
+    <div class="hero-image">
+      <img src="{{ "images/hero_page.jpg" | relURL }}" alt="A processed page from the LPA-1 antiphonary, showing clean Gregorian chant notation with red staff lines and black square notes on parchment">
+    </div>
+  </div>
+</section>
+
+<!-- ===== Features ===== -->
+<section class="section-alt" id="features">
+  <div class="section-inner">
+    <h2 class="section-title">What It Does</h2>
+    <p class="section-subtitle">
+      A 13-stage automated pipeline that transforms smartphone photographs
+      of fragile historical books into publication-ready digital documents.
+    </p>
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <span class="feature-icon">&#128247;</span>
+        <h3>Orientation &amp; Perspective</h3>
+        <p>
+          Automatically detects and corrects page rotation from EXIF data,
+          camera angle, and perspective distortion. Handles landscape,
+          portrait, and arbitrarily rotated shots.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">&#128209;</span>
+        <h3>Page Detection</h3>
+        <p>
+          Finds the page boundaries within the photograph using adaptive
+          thresholding and edge detection, separating the book page from
+          the background surface.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">&#9986;</span>
+        <h3>Content Area Extraction</h3>
+        <p>
+          Crops to the actual content area, removing margins, binding
+          shadows, and decorative borders. Uses ink density analysis
+          to preserve every note and word.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">&#128208;</span>
+        <h3>Deskew &amp; Dewarping</h3>
+        <p>
+          Straightens tilted text using staff line detection and projection
+          profiles. Corrects curved pages from book spines using polynomial
+          mesh warping.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">&#127912;</span>
+        <h3>Image Enhancement</h3>
+        <p>
+          Color cast correction, illumination normalization, shadow removal,
+          stain compensation, show-through suppression, and adaptive contrast
+          enhancement&mdash;tailored for parchment and aged paper.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">&#128196;</span>
+        <h3>Searchable PDF Output</h3>
+        <p>
+          Assembles all processed pages into a single PDF with optimized
+          JPEG compression. Optional OCR layer for Latin text makes the
+          manuscript fully searchable.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== Before/After ===== -->
+<section id="compare">
+  <div class="section-inner">
+    <h2 class="section-title">Before &amp; After</h2>
+    <p class="section-subtitle">
+      Drag the slider to compare the original photograph with the processed result.
+      These are real pages from a Canarian antiphonary (c. 18th century).
+    </p>
+    <div class="sliders-grid">
+
+      <div class="slider-container">
+        <div class="comparison-slider">
+          <img src="{{ "images/IMG_0015_before.jpg" | relURL }}" alt="Before processing">
+          <div class="after-wrap">
+            <img src="{{ "images/IMG_0015_after.jpg" | relURL }}" alt="After processing">
+          </div>
+          <div class="slider-handle"></div>
+          <div class="slider-labels">
+            <span class="slider-label">Before</span>
+            <span class="slider-label">After</span>
+          </div>
+        </div>
+        <div class="slider-caption">Landscape photo &rarr; corrected, cropped, and deskewed</div>
+      </div>
+
+      <div class="slider-container">
+        <div class="comparison-slider">
+          <img src="{{ "images/IMG_0050_before.jpg" | relURL }}" alt="Before processing">
+          <div class="after-wrap">
+            <img src="{{ "images/IMG_0050_after.jpg" | relURL }}" alt="After processing">
+          </div>
+          <div class="slider-handle"></div>
+          <div class="slider-labels">
+            <span class="slider-label">Before</span>
+            <span class="slider-label">After</span>
+          </div>
+        </div>
+        <div class="slider-caption">Perspective and background removed, content area extracted</div>
+      </div>
+
+      <div class="slider-container">
+        <div class="comparison-slider">
+          <img src="{{ "images/IMG_0100_before.jpg" | relURL }}" alt="Before processing">
+          <div class="after-wrap">
+            <img src="{{ "images/IMG_0100_after.jpg" | relURL }}" alt="After processing">
+          </div>
+          <div class="slider-handle"></div>
+          <div class="slider-labels">
+            <span class="slider-label">Before</span>
+            <span class="slider-label">After</span>
+          </div>
+        </div>
+        <div class="slider-caption">Camera angle corrected, page flattened and straightened</div>
+      </div>
+
+      <div class="slider-container">
+        <div class="comparison-slider">
+          <img src="{{ "images/IMG_0150_before.jpg" | relURL }}" alt="Before processing">
+          <div class="after-wrap">
+            <img src="{{ "images/IMG_0150_after.jpg" | relURL }}" alt="After processing">
+          </div>
+          <div class="slider-handle"></div>
+          <div class="slider-labels">
+            <span class="slider-label">Before</span>
+            <span class="slider-label">After</span>
+          </div>
+        </div>
+        <div class="slider-caption">Landscape orientation fixed, margins trimmed, notation preserved</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== Flipbook CTA ===== -->
+<div class="flipbook-cta">
+  <h2>Browse the Complete Book</h2>
+  <p>
+    Explore all 224 pages of the LPA-1 antiphonary (San Nicol&aacute;s, Gran Canaria)
+    in an interactive flipbook viewer.
+  </p>
+  <a href="{{ "flipbook/" | relURL }}" class="btn btn-primary" target="_blank">
+    Open Flipbook
+  </a>
+</div>
+
+<!-- ===== Pipeline ===== -->
+<section class="section-alt" id="pipeline">
+  <div class="section-inner">
+    <h2 class="section-title">The Pipeline</h2>
+    <p class="section-subtitle">
+      A modular, checkpointed pipeline of 13 stages. Each stage writes its
+      output to a numbered directory, enabling inspection and resumability.
+    </p>
+
+    <div class="pipeline-stages">
+      <div class="stage-chip done"><span class="stage-dot"></span> 0&ensp;Preprocess</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 1&ensp;Stitch</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 2&ensp;Orientation</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 3&ensp;Lens Correct</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 4&ensp;Page Detect</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 5&ensp;Perspective</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 6&ensp;Content Area</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 7&ensp;Deskew</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip pending"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip pending"><span class="stage-dot"></span> 9&ensp;Enhance</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip pending"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip pending"><span class="stage-dot"></span> 11&ensp;OCR</div>
+      <span class="pipeline-arrow">&rarr;</span>
+      <div class="stage-chip done"><span class="stage-dot"></span> 12&ensp;PDF</div>
+    </div>
+
+    <div class="pipeline-legend">
+      <span><span class="stage-dot" style="background: var(--green-done);"></span> Implemented</span>
+      <span><span class="stage-dot" style="background: var(--amber-pending);"></span> In progress</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Roadmap ===== -->
+<section class="section-dark" id="roadmap">
+  <div class="section-inner">
+    <h2 class="section-title">Roadmap</h2>
+    <p class="section-subtitle">
+      The core geometry pipeline is complete. Here is what comes next.
+    </p>
+    <div class="roadmap-items">
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge next">Next</span>
+        <h3>Stage 8: Dewarping</h3>
+        <p>
+          Correct page curvature from book spines using staff line polynomial
+          mesh warping. Optional AI path using DocTr/GeoTr with OpenVINO
+          GPU acceleration for pages with few or no staff lines.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge next">Next</span>
+        <h3>Stage 9: Enhancement</h3>
+        <p>
+          Color cast correction, illumination normalization, shadow and stain
+          removal, show-through suppression, CLAHE contrast, denoising,
+          and sharpening&mdash;all severity-adaptive and toggleable.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge next">Next</span>
+        <h3>Stage 10: Normalization</h3>
+        <p>
+          Cross-page color and DPI consistency. Ensures all pages in a
+          book share a uniform appearance, matching white point and
+          resolution across the entire volume.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge next">Next</span>
+        <h3>Stage 11: OCR</h3>
+        <p>
+          Optical character recognition for Latin text using Tesseract
+          or Kraken. Produces an hOCR layer embedded in the final PDF,
+          making every rubric and incipit fully searchable.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge future">Future</span>
+        <h3>OMGR: Optical Music &amp; Gregorian Recognition</h3>
+        <p>
+          Automatic transcription of square notation (neumes on 4-line staves)
+          into machine-readable formats: MEI, MusicXML, or Volpiano.
+          Enabling computational musicology on the <em>cantus</em> repertoire.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge future">Future</span>
+        <h3>Interactive Comparison &amp; Publishing</h3>
+        <p>
+          Built-in tools for comparing pipeline stages side-by-side,
+          publishing web-ready comparison sites, and generating interactive
+          flipbooks. Already available: <code>ghh compare</code>,
+          <code>ghh publish</code>, <code>ghh flipbook</code>.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== Getting Started ===== -->
+<section id="start">
+  <div class="section-inner">
+    <h2 class="section-title">Getting Started</h2>
+    <p class="section-subtitle">
+      Process your first book in minutes.
+    </p>
+    <div class="getting-started-content">
+      <ul class="install-steps">
+        <li>
+          <div>
+            <strong>Install</strong><br>
+            <code>pip install ghh</code> &mdash; or clone the repository and install in
+            development mode with <code>pip install -e ".[dev]"</code>.
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Photograph your book</strong><br>
+            Take photos of each page with a smartphone or digital camera.
+            Any orientation, any angle&mdash;the pipeline handles it.
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Run the pipeline</strong><br>
+            <code>ghh run photos/</code> processes every image through
+            all stages, producing a clean PDF.
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Inspect and compare</strong><br>
+            <code>ghh compare photos_output/</code> generates an interactive
+            viewer to inspect every stage of the processing.
+          </div>
+        </li>
+      </ul>
+      <div class="code-block">
+        <span class="comment"># Install from GitHub</span><br>
+        <span class="prompt">$</span> <span class="command">pip install git+https://github.com/pgarciaq/ghh.git</span><br>
+        <br>
+        <span class="comment"># Process a book</span><br>
+        <span class="prompt">$</span> <span class="command">ghh run my-antiphonary/</span><br>
+        <br>
+        <span class="comment"># List available stages</span><br>
+        <span class="prompt">$</span> <span class="command">ghh stages</span><br>
+        <br>
+        <span class="comment"># Generate comparison viewer</span><br>
+        <span class="prompt">$</span> <span class="command">ghh compare my-antiphonary_output/</span><br>
+        <br>
+        <span class="comment"># Create a publishable flipbook</span><br>
+        <span class="prompt">$</span> <span class="command">ghh flipbook my-antiphonary_output/</span><br>
+        <br>
+        <span class="comment"># Publish for the web</span><br>
+        <span class="prompt">$</span> <span class="command">ghh publish my-antiphonary_output/ site/ --with-flipbook</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Contact ===== -->
+<section class="section-alt" id="contact">
+  <div class="section-inner">
+    <h2 class="section-title">Collaborate</h2>
+    <p class="section-subtitle">
+      Whether you are a conservationist preserving endangered manuscripts,
+      a scholar studying the <em>cantus</em> tradition, or a musician breathing
+      life into these ancient melodies&mdash;we would love to hear from you.
+    </p>
+    <div class="contact-grid">
+      <div class="contact-card">
+        <h3>Try the Tool</h3>
+        <p>
+          Guido's Helping Hand is free and open source. Clone the repository,
+          run it on your own collection, and tell us how it works.
+        </p>
+        <a href="{{ .Site.Params.githubRepo }}" class="btn btn-primary" target="_blank">
+          GitHub Repository
+        </a>
+      </div>
+      <div class="contact-card">
+        <h3>Get in Touch</h3>
+        <p>
+          Have a manuscript collection to digitize? Want to contribute to
+          the OMGR effort? Open an issue on GitHub or reach out directly.
+        </p>
+        <a href="{{ .Site.Params.githubRepo }}/issues" class="btn btn-secondary" target="_blank">
+          Open an Issue
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Footer ===== -->
+<footer class="site-footer">
+  <p class="footer-quote">
+    &ldquo;Ut queant laxis resonare fibris&rdquo;&mdash;Guido d'Arezzo, c. 1025
+  </p>
+  <div class="footer-links">
+    <a href="{{ .Site.Params.githubRepo }}" target="_blank">GitHub</a>
+    <a href="{{ "flipbook/" | relURL }}" target="_blank">Flipbook</a>
+    <a href="#top">Back to top</a>
+  </div>
+  <p class="footer-copy">
+    Guido's Helping Hand &copy; {{ now.Year }}
+    &middot; Built for the preservation of Gregorian chant heritage
+  </p>
+</footer>
+
+{{ end }}

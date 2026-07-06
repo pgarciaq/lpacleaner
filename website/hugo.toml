@@ -1,0 +1,12 @@
+baseURL = "https://pgarciaq.github.io/ghh/"
+languageCode = "en"
+title = "Guido's Helping Hand"
+theme = "ghh"
+publishDir = "../docs"
+
+disableKinds = ["taxonomy", "term"]
+
+[params]
+  description = "Automatically process photographed pages of historical chant books into searchable PDFs"
+  githubRepo = "https://github.com/pgarciaq/ghh"
+  author = "Pedro García"
