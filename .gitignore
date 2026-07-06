@@ -17,3 +17,4 @@ htmlcov/
 venv/
 tests/fixtures/*.png
 tests/golden/
+docs/
