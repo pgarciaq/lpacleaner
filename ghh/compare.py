@@ -678,6 +678,7 @@ function setImage(i) {
   buildTabs();
   render();
   updateMeta();
+  pushHash();
 }
 
 function updateImgCounter() {
@@ -766,6 +767,7 @@ function setStage(i) {
   buildTabs();
   render();
   updateMeta();
+  pushHash();
 }
 
 function setSideLeft(i) {
@@ -774,6 +776,7 @@ function setSideLeft(i) {
   buildTabs();
   render();
   updateMeta();
+  pushHash();
 }
 
 function setSideRight(i) {
@@ -954,7 +957,37 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+/* --- Deep linking via URL hash --- */
+let _suppressHash = false;
+function pushHash() {
+  const h = "#" + IMAGES[imgIdx].stem + "/" + stgIdx;
+  if (location.hash !== h) {
+    _suppressHash = true;
+    history.replaceState(null, "", h);
+  }
+}
+function applyHash() {
+  const m = location.hash.match(/^#([^/]+)(?:[/](\\d+))?$/);
+  if (!m) return;
+  const stem = m[1];
+  const si = m[2] != null ? parseInt(m[2]) : 0;
+  const idx = IMAGES.findIndex(img => img.stem === stem);
+  if (idx < 0) return;
+  imgIdx = idx;
+  stgIdx = Math.max(0, Math.min(si, STAGES.length - 1));
+}
+window.addEventListener("hashchange", () => {
+  if (_suppressHash) { _suppressHash = false; return; }
+  applyHash();
+  $imgSelect.value = imgIdx;
+  updateImgCounter();
+  buildTabs();
+  render();
+  updateMeta();
+});
+
 /* --- Init --- */
+applyHash();
 setImage(imgIdx);
 </script>
 </body>
