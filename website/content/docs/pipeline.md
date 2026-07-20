@@ -4,8 +4,8 @@ weight: 40
 description: "What each processing stage does and when to skip it"
 ---
 
-Guido's Helping Hand processes images through a sequence of 13 stages,
-numbered 0 through 12. Each stage reads from the previous stage's output
+Guido's Helping Hand processes images through a sequence of stages,
+numbered 0 through 14. Each stage reads from the previous stage's output
 and writes to its own checkpoint directory, making it easy to inspect
 intermediate results and resume interrupted runs.
 
@@ -265,3 +265,25 @@ This stage cannot be skipped.
 
 **Key configuration:** `[pdf]` section: `compression`, `jpeg_quality`,
 `dpi`.
+
+### Stage 14: OMR (Optical Music Recognition)
+
+**Checkpoint:** `14_omr/`
+
+Transcribes music pages into GABC notation using
+[ChantOMR](https://pgarciaq.github.io/chant-omr/), a deep learning model
+for Gregorian chant:
+
+- Runs OpenVINO inference on pages classified as "music" by Stage 4
+- Produces `.gabc` files alongside symlinked PNG images
+- Non-music pages (text, blank) pass through with skip metadata
+- Models are loaded once and reused across all pages for efficiency
+
+Requires the `chant-omr` package and a directory of exported OpenVINO IR
+models. If `omr_model_dir` is not configured, the stage is skipped with a
+warning.
+
+**Skip when:** You don't need GABC transcriptions. Use `--skip-omr`.
+
+**Key configuration:** `[omr]` section: `model_dir`, `beam_width`,
+`device`. CLI: `--model-dir`.

@@ -44,9 +44,9 @@ Profiles control which optional stages are included. Select one with
 | Profile | Skipped stages | Use when |
 |---------|---------------|----------|
 | `full` | none | Final production run |
-| `geometry` | Content area, dewarp, deskew, enhance, normalize, OCR | Quick crop and straighten check |
+| `geometry` | Content area, dewarp, deskew, enhance, normalize, OCR, OMR | Quick crop and straighten check |
 | `clean` | OCR | No searchable text needed |
-| `quick` | Content area, dewarp, deskew, normalize, OCR | Fast preview with enhancement |
+| `quick` | Content area, dewarp, deskew, normalize, OCR, OMR | Fast preview with enhancement |
 
 ```bash
 ghh run /path/to/photos --profile geometry
@@ -270,6 +270,24 @@ Controls the HTML flipbook viewer.
 |-----------|------|---------|-------------|
 | `engine` | string | `"tesseract"` | OCR engine (`"tesseract"` or `"kraken"`) |
 | `language` | string | `"lat"` | Language code for OCR |
+
+### [omr] -- Optical Music Recognition (Stage 14)
+
+Controls OMR inference using [ChantOMR](https://pgarciaq.github.io/chant-omr/).
+Requires the `chant-omr` package to be installed separately.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model_dir` | string | `""` | Path to exported OpenVINO model directory |
+| `beam_width` | integer | 1 | Beam search width (1 = greedy decoding) |
+| `device` | string | `"AUTO"` | OpenVINO device: `"AUTO"`, `"CPU"`, `"GPU"` |
+
+```toml
+[omr]
+model_dir = "models/chant-omr"
+beam_width = 1
+device = "AUTO"
+```
 
 ### [pipeline] -- Pipeline control
 
