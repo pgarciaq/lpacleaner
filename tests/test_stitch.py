@@ -183,6 +183,39 @@ class TestGroupDetection:
         for group in groups:
             assert group == sorted(group)
 
+    def test_on_demand_mode_matches_in_memory(self, tmp_path):
+        """image_paths mode produces the same groups as in-memory mode."""
+        from ghh.utils.stitch import detect_groups
+
+        img_a, img_b = _make_overlapping_pair(overlap_frac=0.4, seed=42)
+        standalone = _make_textured_page(seed=99)
+
+        images = {"IMG_0001": img_a, "IMG_0002": img_b, "IMG_0003": standalone}
+        cfg = Config(input_dir=Path("/tmp"))
+
+        groups_memory = detect_groups(images, cfg)
+
+        paths = {}
+        for stem, img in images.items():
+            p = tmp_path / f"{stem}.png"
+            cv2.imwrite(str(p), img)
+            paths[stem] = p
+
+        groups_ondemand = detect_groups(None, cfg, image_paths=paths)
+
+        assert len(groups_memory) == len(groups_ondemand)
+        sets_memory = [set(g) for g in groups_memory]
+        sets_ondemand = [set(g) for g in groups_ondemand]
+        for s in sets_memory:
+            assert s in sets_ondemand
+
+    def test_on_demand_returns_empty_for_no_args(self):
+        """Calling with neither images nor image_paths returns empty."""
+        from ghh.utils.stitch import detect_groups
+
+        cfg = Config(input_dir=Path("/tmp"))
+        assert detect_groups(None, cfg) == []
+
 
 # ---------------------------------------------------------------------------
 # TestNonContentDetection
@@ -435,3 +468,186 @@ class TestStitchStageRun:
         assert sidecar.exists()
         meta = json.loads(sidecar.read_text())
         assert meta["stage"] == "stitch"
+
+    def test_retake_dedup_within_run(self, tmp_path):
+        """End-to-end: retakes in a manually-grouped pair are deduped."""
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+
+        sharp = _make_textured_page(seed=50)
+        blurry = cv2.GaussianBlur(sharp, (15, 15), 5)
+        _save_test_image(input_dir / "IMG_0010.png", sharp)
+        _save_test_image(input_dir / "IMG_0011.png", blurry)
+
+        cfg = Config(
+            input_dir=tmp_path / "raw",
+            output_dir=tmp_path,
+            stitch_groups=[["IMG_0010", "IMG_0011"]],
+        )
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        result = stage.run(input_dir, tmp_path, cfg, state)
+
+        out_dir = tmp_path / "01_stitched"
+        assert result.processed == 1
+        # Only one output (the group leader)
+        pngs = list(out_dir.glob("*.png"))
+        assert len(pngs) == 1
+        assert pngs[0].stem == "IMG_0010"
+
+        sidecar = out_dir / "IMG_0010.json"
+        meta = json.loads(sidecar.read_text())
+        assert "retakes_discarded" in meta
+        assert "IMG_0011" in meta["retakes_discarded"]
+
+    def test_cover_excluded_by_default(self, tmp_path):
+        """Dark cover images are excluded from output by default."""
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+        _save_test_image(input_dir / "IMG_0001.png", _make_textured_page(seed=1))
+        _save_test_image(input_dir / "IMG_0002.png", _make_dark_cover())
+        _save_test_image(input_dir / "IMG_0003.png", _make_textured_page(seed=3))
+
+        cfg = Config(input_dir=tmp_path / "raw", output_dir=tmp_path)
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        result = stage.run(input_dir, tmp_path, cfg, state)
+
+        out_dir = tmp_path / "01_stitched"
+        out_stems = {p.stem for p in out_dir.glob("*.png")}
+        assert "IMG_0002" not in out_stems
+        assert "IMG_0001" in out_stems
+        assert "IMG_0003" in out_stems
+        assert result.processed == 2
+
+    def test_cover_included_with_flag(self, tmp_path):
+        """Dark cover images are kept when include_covers=True."""
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+        _save_test_image(input_dir / "IMG_0001.png", _make_textured_page(seed=1))
+        _save_test_image(input_dir / "IMG_0002.png", _make_dark_cover())
+
+        cfg = Config(
+            input_dir=tmp_path / "raw",
+            output_dir=tmp_path,
+            include_covers=True,
+        )
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        result = stage.run(input_dir, tmp_path, cfg, state)
+
+        out_dir = tmp_path / "01_stitched"
+        out_stems = {p.stem for p in out_dir.glob("*.png")}
+        assert "IMG_0001" in out_stems
+        assert "IMG_0002" in out_stems
+        assert result.processed == 2
+
+    def test_mixed_singles_and_pairs(self, tmp_path):
+        """Mix of overlapping pairs and standalone pages processed correctly."""
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+
+        img_a, img_b = _make_overlapping_pair(overlap_frac=0.4, seed=42)
+        standalone = _make_textured_page(seed=99)
+
+        _save_test_image(input_dir / "IMG_0001.png", img_a)
+        _save_test_image(input_dir / "IMG_0002.png", img_b)
+        _save_test_image(input_dir / "IMG_0003.png", standalone)
+
+        cfg = Config(input_dir=tmp_path / "raw", output_dir=tmp_path)
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        result = stage.run(input_dir, tmp_path, cfg, state)
+
+        out_dir = tmp_path / "01_stitched"
+        out_stems = sorted(p.stem for p in out_dir.glob("*.png"))
+        # Overlapping pair → 1 output (IMG_0001), standalone → 1 output
+        assert len(out_stems) == 2
+        assert "IMG_0001" in out_stems
+        assert "IMG_0003" in out_stems
+        assert result.processed == 2
+
+        # The stitched output's sidecar should show the group
+        sidecar = out_dir / "IMG_0001.json"
+        meta = json.loads(sidecar.read_text())
+        assert set(meta["group"]) == {"IMG_0001", "IMG_0002"}
+
+    def test_error_fallback_passes_through_first_image(self, tmp_path):
+        """When stitching fails, the first image in the group is saved."""
+        from unittest.mock import patch
+
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+
+        img_a = _make_textured_page(seed=1)
+        img_b = _make_textured_page(seed=2)
+        _save_test_image(input_dir / "IMG_0001.png", img_a)
+        _save_test_image(input_dir / "IMG_0002.png", img_b)
+
+        cfg = Config(
+            input_dir=tmp_path / "raw",
+            output_dir=tmp_path,
+            stitch_groups=[["IMG_0001", "IMG_0002"]],
+        )
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        with patch(
+            "ghh.stages.stitch.stitch_images",
+            side_effect=RuntimeError("simulated stitch failure"),
+        ):
+            result = stage.run(input_dir, tmp_path, cfg, state)
+
+        out_dir = tmp_path / "01_stitched"
+        assert result.failed == 1
+        # Fallback: first image in group should be saved
+        fallback_png = out_dir / "IMG_0001.png"
+        assert fallback_png.exists()
+        fallback_img = cv2.imread(str(fallback_png), cv2.IMREAD_UNCHANGED)
+        assert fallback_img is not None
+        assert fallback_img.shape == img_a.shape
+
+    def test_resume_skips_completed_groups(self, tmp_path):
+        """Re-running skips already-completed groups."""
+        from ghh.pipeline import PipelineState
+        from ghh.stages.stitch import StitchStage
+
+        input_dir = tmp_path / "00_preprocessed"
+        input_dir.mkdir()
+        for i in range(3):
+            _save_test_image(
+                input_dir / f"IMG_{i:04d}.png",
+                _make_textured_page(seed=i + 20),
+            )
+
+        cfg = Config(input_dir=tmp_path / "raw", output_dir=tmp_path)
+        state = PipelineState(tmp_path)
+        stage = StitchStage()
+
+        # First run processes everything
+        result1 = stage.run(input_dir, tmp_path, cfg, state)
+        assert result1.processed == 3
+
+        # Second run skips everything
+        result2 = stage.run(input_dir, tmp_path, cfg, state)
+        assert result2.processed == 0
+        assert result2.skipped == 3

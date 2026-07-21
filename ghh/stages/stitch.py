@@ -13,13 +13,11 @@ import logging
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from ghh.config import Config
 from ghh.pipeline import BaseStage, PipelineState, StageResult
 from ghh.utils.image_io import ensure_checkpoint_dir, save_checkpoint
 from ghh.utils.stitch import (
-    compute_focus,
     deduplicate_retakes,
     detect_groups,
     is_non_content,
@@ -61,40 +59,38 @@ class StitchStage(BaseStage):
         if not image_files:
             return result
 
-        # Load all images into memory and track source paths
-        all_images: dict[str, np.ndarray] = {}
-        source_paths: dict[str, Path] = {}
-        for p in image_files:
-            img = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
-            if img is not None:
-                all_images[p.stem] = img
-                source_paths[p.stem] = p
+        # Build stem→path mapping (no pixel data loaded yet)
+        source_paths: dict[str, Path] = {p.stem: p for p in image_files}
 
         # Filter out excluded images
-        exclude_stems = set()
         if cfg.exclude_images:
             exclude_stems = {
                 n.rsplit(".", 1)[0] if "." in n else n for n in cfg.exclude_images
             }
-        for stem in exclude_stems:
-            if stem in all_images:
-                del all_images[stem]
-                logger.info("Excluded image: %s (manual override)", stem)
+            for stem in list(source_paths):
+                if stem in exclude_stems:
+                    del source_paths[stem]
+                    logger.info("Excluded image: %s (manual override)", stem)
 
-        # Detect non-content images (covers, spine shots)
+        # Detect non-content images (load one at a time)
         non_content: list[str] = []
-        for stem, img in list(all_images.items()):
-            if is_non_content(img):
+        for stem in list(source_paths):
+            img = cv2.imread(str(source_paths[stem]), cv2.IMREAD_UNCHANGED)
+            if img is not None and is_non_content(img):
                 non_content.append(stem)
                 if not cfg.include_covers:
-                    del all_images[stem]
+                    del source_paths[stem]
                     logger.info("Excluded non-content image: %s", stem)
 
-        # Detect groups
-        groups = detect_groups(all_images, cfg)
-        logger.info("Detected %d groups from %d images", len(groups), len(all_images))
+        # Detect groups (on-demand: loads consecutive pairs, not all at once)
+        groups = detect_groups(
+            None, cfg, image_paths=source_paths,
+        )
+        logger.info(
+            "Detected %d groups from %d images", len(groups), len(source_paths),
+        )
 
-        # Process each group
+        # Process each group (load images only when needed)
         for group in groups:
             output_stem = group[0]
 
@@ -107,7 +103,14 @@ class StitchStage(BaseStage):
                     continue
 
             try:
-                group_images = {n: all_images[n] for n in group if n in all_images}
+                group_images = {}
+                for n in group:
+                    if n in source_paths:
+                        loaded = cv2.imread(
+                            str(source_paths[n]), cv2.IMREAD_UNCHANGED,
+                        )
+                        if loaded is not None:
+                            group_images[n] = loaded
 
                 if len(group_images) == 0:
                     continue
@@ -119,7 +122,6 @@ class StitchStage(BaseStage):
                 }
 
                 if len(group_images) > 1:
-                    # Deduplicate retakes
                     kept, discarded = deduplicate_retakes(group_images, cfg)
                     if discarded:
                         meta["retakes_discarded"] = discarded
@@ -166,12 +168,20 @@ class StitchStage(BaseStage):
                     "Stage %s failed on group %s: %s", self.name, group, exc,
                     exc_info=True,
                 )
-                # Skippable: pass through the first image in the group
                 try:
                     fallback_name = group[0]
-                    if fallback_name in all_images:
-                        save_checkpoint(all_images[fallback_name], stage_dir, output_stem)
-                        state.mark_image_done(self.checkpoint_name, output_stem)
+                    if fallback_name in source_paths:
+                        fallback_img = cv2.imread(
+                            str(source_paths[fallback_name]),
+                            cv2.IMREAD_UNCHANGED,
+                        )
+                        if fallback_img is not None:
+                            save_checkpoint(
+                                fallback_img, stage_dir, output_stem,
+                            )
+                            state.mark_image_done(
+                                self.checkpoint_name, output_stem,
+                            )
                 except Exception:
                     pass
                 result.failed += 1

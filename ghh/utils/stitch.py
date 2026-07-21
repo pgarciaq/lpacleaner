@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -130,22 +131,38 @@ def _match_pair(
 # ---------------------------------------------------------------------------
 
 def detect_groups(
-    images: dict[str, np.ndarray],
+    images: dict[str, np.ndarray] | None,
     cfg: Config,
+    *,
+    image_paths: dict[str, Path] | None = None,
 ) -> list[list[str]]:
     """Detect which images are overlapping partials of the same page.
 
     Uses ORB feature matching on consecutive image pairs, then builds
     transitive groups. Respects manual overrides from Config.
 
+    Supports two calling modes for memory efficiency:
+
+    - **Legacy (in-memory)**: pass ``images`` dict (all loaded).
+    - **On-demand**: pass ``image_paths`` dict; images are loaded in
+      pairs and freed immediately, keeping peak memory at ~2 images.
+
     Args:
-        images: dict mapping image stem names to BGR arrays, in filename order.
+        images: dict mapping image stem names to BGR arrays (legacy).
         cfg: Pipeline configuration with stitch parameters and overrides.
+        image_paths: dict mapping stem names to file paths (preferred).
 
     Returns:
         List of groups, where each group is a sorted list of image stems.
     """
-    names = sorted(images.keys())
+    if image_paths is not None:
+        names = sorted(image_paths.keys())
+        all_names_set = set(names)
+    elif images is not None:
+        names = sorted(images.keys())
+        all_names_set = set(names)
+    else:
+        return []
 
     # If manual stitch_groups are provided, use them as the primary grouping
     if cfg.stitch_groups:
@@ -153,7 +170,7 @@ def detect_groups(
         groups: list[list[str]] = []
         for group in cfg.stitch_groups:
             stems = sorted(n.rsplit(".", 1)[0] if "." in n else n for n in group)
-            stems = [s for s in stems if s in images]
+            stems = [s for s in stems if s in all_names_set]
             if stems:
                 groups.append(stems)
                 manual_stems.update(stems)
@@ -174,14 +191,32 @@ def detect_groups(
     # Build adjacency via ORB matching on consecutive pairs
     adjacency: dict[str, set[str]] = defaultdict(set)
 
+    # Cache: keep the last loaded image to avoid re-reading
+    _cached_stem: str | None = None
+    _cached_img: np.ndarray | None = None
+
     for i in range(len(names) - 1):
         name_a, name_b = names[i], names[i + 1]
 
         if name_a in no_stitch or name_b in no_stitch:
             continue
 
+        if image_paths is not None:
+            if _cached_stem == name_a:
+                img_a = _cached_img
+            else:
+                img_a = cv2.imread(str(image_paths[name_a]), cv2.IMREAD_UNCHANGED)
+            img_b = cv2.imread(str(image_paths[name_b]), cv2.IMREAD_UNCHANGED)
+            if img_a is None or img_b is None:
+                continue
+            _cached_stem = name_b
+            _cached_img = img_b
+        else:
+            img_a = images[name_a]
+            img_b = images[name_b]
+
         good_count, inlier_ratio, overlap_frac = _match_pair(
-            images[name_a], images[name_b], cfg,
+            img_a, img_b, cfg,
         )
 
         if (
