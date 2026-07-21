@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# OpenVINO on Intel GPU — see docs/DEPENDENCIES.md for Fedora RPMs
+# OpenVINO on Intel GPU — see DEPENDENCIES.md for Fedora RPMs
 ai = [
     "openvino>=2024.0",
 ]
@@ -40,7 +40,7 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/pgarciaq/ghh/blob/master/docs/DEPENDENCIES.md"
+Documentation = "https://github.com/pgarciaq/ghh/blob/master/DEPENDENCIES.md"
 
 [project.scripts]
 ghh = "ghh.cli:main"

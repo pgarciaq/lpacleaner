@@ -2351,7 +2351,7 @@ Only one place, only when explicitly requested:
   converted to OpenVINO IR (FP16), runs on Intel Arc GPU. Used as
   fallback when classical dewarping finds fewer than 2 staff lines
   (text-only pages, decorative pages). Requires `openvino` (optional
-  dependency group `ai`). See [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+  dependency group `ai`). See [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ### Where AI/ML Could Add Value (Not Currently Implemented)
 
@@ -2696,7 +2696,7 @@ ghh = "ghh.cli:main"
 
 **Python extras:** `ai` (DocTr dewarp), `omr` (chant-omr inference) — both use OpenVINO only at runtime.
 
-**Fedora RPMs:** `tesseract`, `tesseract-langpack-lat`; `intel-compute-runtime`, `oneapi-level-zero` for Intel Arc GPU. See [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+**Fedora RPMs:** `tesseract`, `tesseract-langpack-lat`; `intel-compute-runtime`, `oneapi-level-zero` for Intel Arc GPU. See [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ---
 

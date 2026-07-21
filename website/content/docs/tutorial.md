@@ -44,28 +44,36 @@ pip install ".[historical-ocr]"   # Kraken OCR for historical scripts
 pip install ".[dev]"              # pytest, ruff (for contributors)
 ```
 
-### Install Tesseract (optional)
+### Install system dependencies
 
 Tesseract enables the OCR stage, which adds a searchable text layer to the
-final PDF. If Tesseract is not installed, ghh skips OCR gracefully.
+final PDF. Ghostscript is used by the PDF assembly stage. If Tesseract is
+not installed, ghh skips OCR gracefully.
 
 **Fedora / RHEL:**
 
 ```bash
-sudo dnf install tesseract tesseract-langpack-lat
+sudo dnf install tesseract tesseract-langpack-lat ghostscript
 ```
 
 **Ubuntu / Debian:**
 
 ```bash
-sudo apt install tesseract-ocr tesseract-ocr-lat
+sudo apt install tesseract-ocr tesseract-ocr-lat ghostscript
 ```
 
-**macOS:**
+**macOS (Homebrew):**
 
 ```bash
-brew install tesseract tesseract-lang
+brew install python@3.13 tesseract tesseract-lang ghostscript
 ```
+
+ghh works on macOS (Intel and Apple Silicon) with no code changes.
+OpenVINO's `--ai-dewarp` runs on CPU on macOS.
+
+For the full dependency matrix, see the
+[DEPENDENCIES.md](https://github.com/pgarciaq/ghh/blob/master/DEPENDENCIES.md)
+file in the repository.
 
 ## Preparing your photos
 

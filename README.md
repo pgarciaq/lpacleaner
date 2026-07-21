@@ -33,20 +33,22 @@ pip install ".[historical-ocr]" # Kraken OCR engine (requires Python <3.14)
 pip install ".[dev]"            # pytest, ruff, coverage
 ```
 
-Fedora RPMs (OCR + Intel GPU): see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+### System dependencies
 
-For OCR support, install [Tesseract](https://github.com/tesseract-ocr/tesseract):
+For OCR support, install [Tesseract](https://github.com/tesseract-ocr/tesseract) and [Ghostscript](https://ghostscript.com/):
 
 ```bash
 # Fedora / RHEL
-sudo dnf install tesseract
+sudo dnf install tesseract tesseract-langpack-lat ghostscript
 
 # Ubuntu / Debian
-sudo apt install tesseract-ocr
+sudo apt install tesseract-ocr tesseract-ocr-lat ghostscript
 
-# macOS
-brew install tesseract
+# macOS (Homebrew)
+brew install tesseract tesseract-lang ghostscript
 ```
+
+For the full dependency matrix (Intel GPU, OpenVINO, etc.), see [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ## Quick Start
 
@@ -175,27 +177,15 @@ output/
 
 ## Development
 
-Dependency matrix: **[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)**.
+Dependency matrix: **[DEPENDENCIES.md](DEPENDENCIES.md)**.
 
 ```bash
 pip install -e ".[dev]"
 pytest
 ```
 
-**Fedora system packages (OCR + Intel GPU):**
-
-```bash
-sudo dnf install tesseract tesseract-langpack-lat
-sudo dnf install intel-compute-runtime oneapi-level-zero   # OpenVINO GPU (dewarp + OMR)
-sudo usermod -aG render "$USER"   # re-login for /dev/dri/renderD* access
-```
-
-Optional Python extras:
-
-```bash
-pip install -e ".[ai]"    # --ai-dewarp (OpenVINO)
-pip install -e ".[omr]"   # ghh omr (OpenVINO, chant-omr model)
-```
+System packages and optional Python extras per platform:
+see **[DEPENDENCIES.md](DEPENDENCIES.md)**.
 
 Run with coverage:
 
