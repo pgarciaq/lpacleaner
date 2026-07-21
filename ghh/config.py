@@ -102,12 +102,12 @@ class Config:
     content_margin_padding: float = 0.0
     content_feather_sigma: int = 20
 
-    # Deskew (Stage 7)
+    # Deskew (Stage 8)
     deskew_max_angle: float = 5.0
     deskew_angle_step: float = 0.1
     deskew_skip_threshold: float = 0.1
 
-    # PDF assembly (Stage 12)
+    # PDF assembly (Stage 15)
     pdf_compression: str = "jpeg"
     pdf_jpeg_quality: int = 90
     pdf_dpi: int = 300

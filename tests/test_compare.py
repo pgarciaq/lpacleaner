@@ -95,11 +95,11 @@ class TestDiscoverBook:
     def test_skips_input_dir_when_none(self, tmp_path: Path):
         out, _ = _make_book(
             tmp_path,
-            stages=["07_deskewed"],
+            stages=["08_deskewed"],
             stems=["IMG_0001"],
         )
         book = discover_book(out, None)
-        assert book["stages"] == ["7: Deskew"]
+        assert book["stages"] == ["8: Deskew"]
 
     def test_unknown_stage_number_uses_dirname(self, tmp_path: Path):
         out, _ = _make_book(tmp_path, stages=["99_custom"], stems=["A"])
@@ -418,16 +418,16 @@ class TestPublishBook:
     def test_stage_filter(self, tmp_path: Path):
         out, _ = _make_book(
             tmp_path,
-            stages=["00_preprocessed", "05_perspective", "07_deskewed"],
+            stages=["00_preprocessed", "05_perspective", "08_deskewed"],
             stems=["A"],
         )
         pub = tmp_path / "pub"
-        publish_book(out, pub, stage_filter={"00", "07", "orig"})
+        publish_book(out, pub, stage_filter={"00", "08", "orig"})
         html = (pub / "index.html").read_text()
         match = re.search(r"const BOOK = ({.*?});", html)
         book = json.loads(match.group(1))
         assert "0: Preprocess" in book["stages"]
-        assert "7: Deskew" in book["stages"]
+        assert "8: Deskew" in book["stages"]
         assert "5: Perspective" not in book["stages"]
 
     def test_auto_infers_input_dir(self, tmp_path: Path):

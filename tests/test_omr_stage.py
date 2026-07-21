@@ -71,10 +71,10 @@ class TestOmrStageContract:
         assert OmrStage().name == "omr"
 
     def test_has_correct_number(self):
-        assert OmrStage().number == 12
+        assert OmrStage().number == 13
 
     def test_has_correct_checkpoint_name(self):
-        assert OmrStage().checkpoint_name == "12_omr"
+        assert OmrStage().checkpoint_name == "13_omr"
 
     def test_has_correct_error_class(self):
         assert OmrStage().error_class == "skippable"
@@ -93,8 +93,8 @@ class TestOmrStageContract:
 
     def test_registered_in_stage_registry(self):
         from ghh.stages import STAGE_BY_NUMBER
-        assert 12 in STAGE_BY_NUMBER
-        assert STAGE_BY_NUMBER[12] is OmrStage
+        assert 13 in STAGE_BY_NUMBER
+        assert STAGE_BY_NUMBER[13] is OmrStage
 
 
 class TestOmrStageSkipUnconfigured:
@@ -135,7 +135,7 @@ class TestOmrStageNonMusic:
         assert result.processed == 2
         assert result.failed == 0
 
-        stage_dir = output_dir / "12_omr"
+        stage_dir = output_dir / "13_omr"
         for stem in ("IMG_0001", "IMG_0002"):
             sidecar = stage_dir / f"{stem}.json"
             assert sidecar.exists()
@@ -168,7 +168,7 @@ class TestOmrStageMusicPages:
         assert result.processed == 3
         assert result.failed == 0
 
-        stage_dir = output_dir / "12_omr"
+        stage_dir = output_dir / "13_omr"
 
         for stem in ("IMG_0001", "IMG_0003"):
             gabc = stage_dir / f"{stem}.gabc"

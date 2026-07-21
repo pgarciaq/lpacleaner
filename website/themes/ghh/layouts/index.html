@@ -249,15 +249,15 @@
       <div class="pipeline-branch branch-book">
         <div class="pipeline-branch-label">Book Branch <span class="branch-desc">(full page &rarr; PDF)</span></div>
         <div class="pipeline-stages pipeline-row">
-          <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
+          <div class="stage-chip pending"><span class="stage-dot"></span> 8&ensp;Deskew (full page)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Dewarp (full page)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Enhance</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Enhance (full page)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 11&ensp;Normalize (full page)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 11&ensp;OCR</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 12&ensp;OCR</div>
         </div>
       </div>
       <div class="pipeline-branch branch-score">
@@ -265,17 +265,17 @@
         <div class="pipeline-stages pipeline-row">
           <div class="stage-chip pending"><span class="stage-dot"></span> 6&ensp;Content Area</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> Staff Extract</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 7&ensp;Staff Extract</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
+          <div class="stage-chip pending"><span class="stage-dot"></span> 8&ensp;Deskew (staves)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Dewarp (staves)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Enhance</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Enhance (staves)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 11&ensp;Normalize (staves)</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip done"><span class="stage-dot"></span> 12&ensp;OMR</div>
+          <div class="stage-chip done"><span class="stage-dot"></span> 13&ensp;OMR</div>
         </div>
       </div>
     </div>
@@ -284,9 +284,9 @@
 
     <div class="pipeline-phase-label">Finalization</div>
     <div class="pipeline-stages pipeline-row">
-      <div class="stage-chip not-started"><span class="stage-dot"></span> 13&ensp;Score Render</div>
+      <div class="stage-chip not-started"><span class="stage-dot"></span> 14&ensp;Score Render</div>
       <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip done"><span class="stage-dot"></span> 14&ensp;PDF</div>
+      <div class="stage-chip done"><span class="stage-dot"></span> 15&ensp;PDF</div>
     </div>
 
     <div class="pipeline-legend">
@@ -321,7 +321,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge next">Next</span>
-        <h3>Stage 8: Dewarping</h3>
+        <h3>Stage 9: Dewarping</h3>
         <p>
           Correct page curvature from book spines using staff line polynomial
           mesh warping. Optional AI path using DocTr/GeoTr with OpenVINO
@@ -331,7 +331,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge next">Next</span>
-        <h3>Stage 9: Enhancement</h3>
+        <h3>Stage 10: Enhancement</h3>
         <p>
           Color cast correction, illumination normalization, shadow and stain
           removal, show-through suppression, CLAHE contrast, denoising,
@@ -341,7 +341,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge next">Next</span>
-        <h3>Stage 10: Normalization</h3>
+        <h3>Stage 11: Normalization</h3>
         <p>
           Cross-page color and DPI consistency. Ensures all pages in a
           book share a uniform appearance, matching white point and
@@ -351,7 +351,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge next">Next</span>
-        <h3>Stage 11: OCR</h3>
+        <h3>Stage 12: OCR</h3>
         <p>
           Optical character recognition for Latin text using Tesseract
           or Kraken. Produces an hOCR layer embedded in the final PDF,
@@ -361,7 +361,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge done">Done</span>
-        <h3>Stage 12: OMR &mdash; Optical Music Recognition</h3>
+        <h3>Stage 13: OMR &mdash; Optical Music Recognition</h3>
         <p>
           Automatic transcription of square notation (neumes on 4-line staves)
           into machine-readable <a href="https://gregorio-project.github.io/gabc/" style="color: var(--gold-light);">GABC</a>
@@ -373,7 +373,7 @@
 
       <div class="roadmap-card">
         <span class="roadmap-badge future">Future</span>
-        <h3>Stage 13: Score Render</h3>
+        <h3>Stage 14: Score Render</h3>
         <p>
           Renders GABC transcriptions into publication-quality Gregorian notation
           using <a href="https://gregorio-project.github.io/" style="color: var(--gold-light);">Gregorio</a>,

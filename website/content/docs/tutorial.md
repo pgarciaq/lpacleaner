@@ -120,9 +120,9 @@ By default, ghh creates an output directory next to your input:
   04_page_detected/        # after page detection and crop
   05_perspective/          # after perspective correction
   06_content_area/         # after content area extraction
-  07_deskewed/             # after straightening
-  12_omr/                  # OMR transcription (if enabled)
-  13_pdf/                  # final PDF
+  08_deskewed/             # after straightening
+  13_omr/                  # OMR transcription (if enabled)
+  15_pdf/                  # final PDF
   photos.pdf               # the output PDF
 ```
 

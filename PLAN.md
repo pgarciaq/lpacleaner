@@ -51,12 +51,12 @@ physical condition (coastal preservation, humidity damage, aging).
 | 12 | Stage 4 (page detect) | **Done** | 30 tests | Otsu→inverted Otsu→Canny→adaptive→full-image fallback; ink-aware classification; detect-only (no crop), quad in sidecar |
 | 13 | Stage 5 (perspective) | **Done** | 28 tests | warpPerspective from Stage 4 quad; max-edge sizing; background fill; sidecar propagation |
 | 14 | Stage 6 (content area) | **Done** | 29 tests | Hough border detection→ink density→inset fallback; feathered masking; margin padding; metadata forwarding |
-| 15 | Stage 7 (deskew) | **Done** | 35 tests | Staff-line angle (184) + projection profile (27) + skipped (13); 224/224 on LPA-1 (4m12s); shared image_utils |
-| 16 | Stage 8 (dewarp) | Pending | | |
-| 17 | Stage 9 (enhance) | Pending | | |
-| 18 | Stage 10 (normalize) | Pending | | |
-| 19 | Stage 11 (OCR) | Pending | | |
-| 20 | Stage 13 (PDF assembly) | **Done** | 35 tests | img2pdf; JPEG/PNG compression; case-insensitive; DPI layout; resume; exclude; 224-page LPA-1 PDF (311.9 MB) |
+| 15 | Stage 8 (deskew) | **Done** | 35 tests | Staff-line angle (184) + projection profile (27) + skipped (13); 224/224 on LPA-1 (4m12s); shared image_utils |
+| 16 | Stage 9 (dewarp) | Pending | | |
+| 17 | Stage 10 (enhance) | Pending | | |
+| 18 | Stage 11 (normalize) | Pending | | |
+| 19 | Stage 12 (OCR) | Pending | | |
+| 20 | Stage 15 (PDF assembly) | **Done** | 35 tests | img2pdf; JPEG/PNG compression; case-insensitive; DPI layout; resume; exclude; 224-page LPA-1 PDF (311.9 MB) |
 | 21 | `flipbook` CLI command | **Done** | 32 tests | StPageFlip HTML flipbook; vendored JS; PDF download; --with-flipbook/--with-pdf on publish |
 | 22 | `compare` CLI command | **Done** | 26 tests | Full-book HTML viewer; PgUp/PgDn image nav; side-by-side; auto-generated after `run`; dark blue theme |
 | 23 | `publish` CLI command | **Done** | 16 tests | Self-contained JPEG site for web hosting; warm amber theme; stage filter; timestamped badge |
@@ -126,7 +126,7 @@ ghh/
                             #   shadows, stains, halos, salt, CLAHE, denoise, sharpen
       normalize.py          # Stage 10: cross-page color + DPI normalization
       ocr.py                # Stage 11: Tesseract/Kraken OCR
-      pdf_assembly.py       # Stage 13: searchable PDF assembly
+      pdf_assembly.py       # Stage 15: searchable PDF assembly
     utils/
       __init__.py
       line_detect.py        # Generic ink detection, staff line detection, foxing filter (R9)
@@ -156,13 +156,13 @@ output/
   04_cropped/                IMG_0011.jpg, corners.json, ...
   05_perspective/            IMG_0011.jpg, ...
   06_content/                IMG_0011.jpg, ...   (content area cropped, edges masked)
-  07_deskewed/               IMG_0011.jpg, ...
+  08_deskewed/               IMG_0011.jpg, ...
   08_dewarped/               IMG_0011.jpg, ...
   09_enhanced/               IMG_0011.jpg, ...
   10_normalized/             IMG_0011.jpg, ...   (cross-page color + DPI matched)
   11_ocr/                    IMG_0011.hocr, ...  (hOCR XML files)
-  12_omr/                    *.gabc, *.json (OMR transcription)
-  13_pdf/                    <book>.pdf, <book>.pdf.json
+  13_omr/                    *.gabc, *.json (OMR transcription)
+  15_pdf/                    <book>.pdf, <book>.pdf.json
   flipbook/                  index.html, pages/, page-flip.browser.js, flipbook.json
   pipeline.json                                  (stage status, parameters used)
   ghh.log                                 (detailed log, always verbose)
@@ -297,7 +297,7 @@ Total cost for 5 images: ~1 second.
 The ±15° tolerance in HoughLinesP handles real-world camera wobble.
 Even a photo taken at 87° (3° off from 90°) has its staff lines brought
 to ~3° from horizontal by the 90° rotation -- well within the detection
-window. Fine-angle correction (the remaining 2-3°) is Stage 7's job.
+window. Fine-angle correction (the remaining 2-3°) is Stage 8's job.
 
 ### Algorithm
 
@@ -975,7 +975,7 @@ content_feather_sigma: int = 20
 
 ---
 
-## Stage 7: Deskew (`deskew.py`)
+## Stage 8: Deskew (`deskew.py`)
 
 ### Algorithm
 
@@ -1020,7 +1020,7 @@ deskew_skip_threshold: float = 0.1
 ### Input/Output
 
 - Input: image from `06_content/`
-- Output: deskewed image in `07_deskewed/`
+- Output: deskewed image in `08_deskewed/`
 
 ---
 
@@ -1064,7 +1064,7 @@ Two paths: classical (default) and AI (optional).
    - Otherwise: pass through unchanged
 
 7. Post-geometry trim: shared trim_to_content() utility
-   (same as Stage 7 -- cleans up background artifacts from remap).
+   (same as Stage 8 -- cleans up background artifacts from remap).
 ```
 
 ### AI Path: DocTr GeoTr (Optional, `--ai-dewarp`)
@@ -1090,7 +1090,7 @@ dewarp_morph_kernel: tuple = (1, 20)
 
 ### Input/Output
 
-- Input: deskewed image from `07_deskewed/`
+- Input: deskewed image from `08_deskewed/`
 - Output: dewarped image in `08_dewarped/`
 - Metadata: staff positions, polynomial coefficients, method used
 
@@ -1309,13 +1309,13 @@ ocr_blank_stddev_threshold: float = 15
 
 ---
 
-## Stage 13: PDF Assembly (`pdf_assembly.py`)
+## Stage 15: PDF Assembly (`pdf_assembly.py`)
 
 ### Algorithm (implemented)
 
 ```
 1. Resolve input: find the latest completed stage checkpoint directory.
-   The CLI's _find_previous_checkpoint walks backward from stage 13.
+   The CLI's _find_previous_checkpoint walks backward from stage 15.
 
 2. Collect images from input directory (sorted by filename = page order).
    Exclude images listed in cfg.exclude_images.
@@ -1363,7 +1363,7 @@ dpi = 300
 ### Input/Output
 
 - Input: images from latest completed stage checkpoint
-- Output: `<input_dir_name>.pdf` + `<input_dir_name>.pdf.json` sidecar in `13_pdf/`
+- Output: `<input_dir_name>.pdf` + `<input_dir_name>.pdf.json` sidecar in `15_pdf/`
 
 ### Future enhancements (deferred)
 
@@ -1388,7 +1388,7 @@ This is a **standalone CLI command** (not a pipeline stage), similar to
 
 ```
 1. Resolve input: find the latest completed image stage checkpoint
-   (same logic as Stage 13 -- walk backward from the PDF stage).
+   (same logic as Stage 15 -- walk backward from the PDF stage).
 
 2. Collect images (sorted by filename = page order).
    Exclude images from cfg.exclude_images.
@@ -1436,7 +1436,7 @@ title = "LPA 1 - San Nicolás"
   - `index.html` (self-contained viewer)
   - `pages/` (resized JPEG images, numbered 001.jpg, 002.jpg, ...)
   - `page-flip.browser.js` (vendored library)
-  - `book.pdf` (optional, copied from 13_pdf/ unless --no-pdf)
+  - `book.pdf` (optional, copied from 15_pdf/ unless --no-pdf)
   - `flipbook.json` (sidecar metadata)
 
 ### Library choice: StPageFlip (`page-flip`)
@@ -1479,7 +1479,7 @@ ghh publish OUTPUT_DIR DIR --with-pdf        # include flipbook + PDF download
   Node.js required to view it. Just open `index.html` in a browser.
 - `ghh publish --with-flipbook` generates the flipbook into `PUBLISH_DIR/flipbook/`.
   `--with-pdf` implies `--with-flipbook` and copies the PDF for download.
-- PDF is sourced from `13_pdf/<book>.pdf`; if absent, the link is silently omitted.
+- PDF is sourced from `15_pdf/<book>.pdf`; if absent, the link is silently omitted.
 
 ---
 
@@ -1610,7 +1610,7 @@ Each stage emits progress via `tqdm` (when available) or plain logging:
 [Stage 1] Grouping & stitching... 220/220 [00:15, 14.7 img/s]
 [Stage 2] Orienting images... 220/220 [00:12, 18.3 img/s]
 ...
-[Stage 13] Assembling PDF... done (222 pages, 185 MB)
+[Stage 15] Assembling PDF... done (222 pages, 185 MB)
 
 === Pipeline Complete ===
 Processed 222/225 images in 12m34s.
@@ -1680,7 +1680,7 @@ def estimate_background(img: np.ndarray, border_frac: float = 0.05) -> tuple[int
 
     Returns BGR color as a 3-tuple. Uses median of border pixel values
     for robustness against content near the edges.
-    Used by: Stage 5 (perspective), Stage 7 (deskew), Stage 8 (dewarp).
+    Used by: Stage 5 (perspective), Stage 8 (deskew), Stage 9 (dewarp).
     """
 
 def trim_to_content(
@@ -1696,7 +1696,7 @@ def trim_to_content(
     3. Find bounding rect of non-background region.
     4. Crop to bounding rect.
     5. Add uniform margin (margin_frac * width) filled with bg_color.
-    Used by: Stage 7 (deskew), Stage 8 (dewarp).
+    Used by: Stage 8 (deskew), Stage 9 (dewarp).
     """
 ```
 
@@ -1974,7 +1974,7 @@ PUBLISH_DIR/
     │   └── ...
     ├── 00_preprocessed/
     ├── 05_perspective/
-    └── 07_deskewed/
+    └── 08_deskewed/
 ```
 
 ### Workflow for a new book
@@ -2525,7 +2525,7 @@ and doesn't require as much training data.
 
 No changes needed to the current pipeline for OMR readiness. The
 architecture is already compatible:
-- OMR is Stage 12 (runs before PDF assembly, Stage 13)
+- OMR is Stage 13 (runs before PDF assembly, Stage 15)
 - It consumes Stage 8 output (dewarped images) and Stage 8 metadata
   (staff positions)
 - It runs after the image pipeline, optionally in parallel with
@@ -2577,13 +2577,13 @@ Config-aware invalidation:
     Stage 4:  [page_detect_*]
     Stage 5:  (none -- only depends on Stage 4 corners)
     Stage 6:  [content_*, staff_color_*, has_border_frame]
-    Stage 7:  [deskew_*, staff_color_*]
+    Stage 8:  [deskew_*, staff_color_*]
     Stage 8:  [dewarp_*, staff_color_*, ai_dewarp]
     Stage 9:  [enhance_*, color_cast_*, shadow_*, stain_*, halo_*, salt_*]
     Stage 10: [normalize_*]
     Stage 11: [ocr_*]
-    Stage 12: [omr_*]
-    Stage 13: [pdf_*]
+    Stage 13: [omr_*]
+    Stage 15: [pdf_*]
 
   If any field in a stage's dependency set has changed since the last
   run, ALL images in that stage are invalidated AND all downstream
@@ -2632,7 +2632,7 @@ Worker count auto-scales to available RAM, not just CPU count.
      for standalone images
    - Stage 10 (normalize): two-pass -- first pass collects stats
      (parallel), second pass applies normalization (parallel)
-   - Stage 13 (PDF): single-threaded (sequential assembly)
+   - Stage 15 (PDF): single-threaded (sequential assembly)
 
 5. Default --workers 0 = auto-detect. Explicit --workers N overrides.
 ```
@@ -2729,12 +2729,12 @@ on synthetic images:
 13. ~~**Stage 4** (page detect)~~: ✅ Otsu→inverted Otsu→Canny→adaptive→full-image cascade, quad refinement with escalating epsilon, ink-aware page classification, bounding-box crop (27 tests)
 14. ~~**Stage 5** (perspective)~~: ✅ warpPerspective from Stage 4 quad, max-edge sizing, background fill (not black), sidecar propagation via BaseStage.run() (28 tests)
 15. ~~**Stage 6** (content area)~~: ✅ Hough border detection→ink density→inset fallback; feathered masking; margin padding; sidecar forwarding (29 tests)
-16. **Stage 7** (deskew): staff angle or projection profile, post-geometry trim
+16. **Stage 8** (deskew): staff angle or projection profile, post-geometry trim
 17. **Stage 8** (dewarp): polynomial mesh from staff lines, background fill (most complex stage)
 18. **Stage 9** (enhance): R3 color cast, illumination, shadows (R5), stains (R6), halos (R10), show-through, CLAHE, salt (R11), denoise, sharpen
 19. **Stage 10** (normalize): cross-page color + DPI (global pass, batch stage)
 20. **Stage 11** (OCR): Tesseract integration, graceful skip if missing, Kraken optional
-21. ~~**Stage 13** (PDF)~~: ✅ img2pdf assembly, JPEG/PNG compression, case-insensitive config, DPI layout, resume, exclude (35 tests)
+21. ~~**Stage 15** (PDF)~~: ✅ img2pdf assembly, JPEG/PNG compression, case-insensitive config, DPI layout, resume, exclude (35 tests)
 22. ~~**`ghh flipbook`**~~: ✅ StPageFlip HTML flipbook; vendored JS; PDF download; --with-flipbook/--with-pdf on publish (32 tests)
 23. **pipeline.py**: orchestrator -- chain stages, progress reporting, end-of-run summary
 24. **CLI polish**: tqdm progress bars, `inspect` + `review` commands, error handling UX

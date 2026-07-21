@@ -87,7 +87,7 @@ class TestFindSourceImages:
     def test_falls_back_to_earlier_checkpoint(self, tmp_path: Path):
         out = _make_pipeline_output(tmp_path, stages=["00_preprocessed"])
         # Add an empty higher checkpoint
-        (out / "07_deskewed").mkdir()
+        (out / "08_deskewed").mkdir()
         images = _find_source_images(out)
         assert len(images) == 3
         assert all("00_preprocessed" in str(p) for p in images)

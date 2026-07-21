@@ -1,4 +1,4 @@
-"""Stage 7: Deskew.
+"""Stage 8: Deskew.
 
 Corrects the small residual skew angle (typically 0-3 degrees) left
 after Stage 2's coarse orientation correction.
@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 class DeskewStage(BaseStage):
     name = "deskew"
-    number = 7
-    checkpoint_name = "07_deskewed"
+    number = 8
+    checkpoint_name = "08_deskewed"
     error_class = "skippable"
 
     def process_image(

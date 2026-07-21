@@ -1,7 +1,7 @@
 """Shared image utilities used across multiple pipeline stages.
 
 Provides background color estimation and post-geometry content trimming.
-Used by Stage 5 (perspective), Stage 7 (deskew), and Stage 8 (dewarp).
+Used by Stage 5 (perspective), Stage 8 (deskew), and Stage 9 (dewarp).
 """
 
 from __future__ import annotations

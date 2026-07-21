@@ -76,11 +76,11 @@ class TestPDFAssemblyStageContract:
 
     def test_has_correct_number(self):
         stage = PDFAssemblyStage()
-        assert stage.number == 13
+        assert stage.number == 15
 
     def test_has_correct_checkpoint_name(self):
         stage = PDFAssemblyStage()
-        assert stage.checkpoint_name == "13_pdf"
+        assert stage.checkpoint_name == "15_pdf"
 
     def test_has_correct_error_class(self):
         stage = PDFAssemblyStage()
@@ -98,8 +98,8 @@ class TestPDFAssemblyStageContract:
 
     def test_registered_in_stage_registry(self):
         from ghh.stages import STAGE_BY_NUMBER
-        assert 13 in STAGE_BY_NUMBER
-        assert STAGE_BY_NUMBER[13] is PDFAssemblyStage
+        assert 15 in STAGE_BY_NUMBER
+        assert STAGE_BY_NUMBER[15] is PDFAssemblyStage
 
 
 # ---------------------------------------------------------------------------

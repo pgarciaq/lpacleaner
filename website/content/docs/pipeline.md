@@ -5,7 +5,7 @@ description: "What each processing stage does and when to skip it"
 ---
 
 Guido's Helping Hand processes images through a sequence of stages,
-numbered 0 through 14. Each stage reads from the previous stage's output
+numbered 0 through 15. Each stage reads from the previous stage's output
 and writes to its own checkpoint directory, making it easy to inspect
 intermediate results and resume interrupted runs.
 
@@ -151,9 +151,24 @@ the full page including margins. Use `--skip-content-area`.
 
 **Key configuration:** `[content_area]` section.
 
-### Stage 7: Deskew
+### Stage 7: Staff Extract (Score branch only)
 
-**Checkpoint:** `07_deskewed/`
+**Checkpoint:** `07_staff_extract/`
+
+Isolates music staff regions from mixed-content pages:
+
+- Detects and extracts music staff areas, removing illustrations,
+  decorative elements, and marginal annotations
+- Produces cropped images containing only musical notation
+- Pages without music pass through unchanged
+
+**Status:** Not yet implemented.
+
+**Key configuration:** `[staff_extract]` section (TBD).
+
+### Stage 8: Deskew
+
+**Checkpoint:** `08_deskewed/`
 
 Straightens slightly tilted pages:
 
@@ -170,9 +185,9 @@ over-correct in some cases.
 **Key configuration:** `[deskew]` section: `max_angle`,
 `skip_threshold`.
 
-### Stage 8: Dewarp
+### Stage 9: Dewarp
 
-**Checkpoint:** `08_dewarped/`
+**Checkpoint:** `09_dewarped/`
 
 Corrects page curl and waviness from the book's binding:
 
@@ -187,9 +202,9 @@ Corrects page curl and waviness from the book's binding:
 
 **Key configuration:** `--ai-dewarp` flag, `--skip-dewarp` flag.
 
-### Stage 9: Enhance
+### Stage 10: Enhance
 
-**Checkpoint:** `09_enhanced/`
+**Checkpoint:** `10_enhanced/`
 
 Applies a chain of image enhancement operations to improve readability:
 
@@ -215,9 +230,9 @@ from `[condition]` control how aggressively each correction operates.
 
 **Key configuration:** `[enhance]` section, `[condition]` section.
 
-### Stage 10: Normalize
+### Stage 11: Normalize
 
-**Checkpoint:** `10_normalized/`
+**Checkpoint:** `11_normalized/`
 
 Ensures visual consistency across all pages in the book:
 
@@ -232,7 +247,7 @@ one at a time, because it needs to compute global statistics first.
 
 **Status:** Not yet implemented.
 
-### Stage 11: OCR
+### Stage 12: OCR (Book branch only)
 
 **Checkpoint:** (embedded in PDF)
 
@@ -251,9 +266,9 @@ gracefully.
 
 **Key configuration:** `[ocr]` section: `engine`, `language`.
 
-### Stage 12: OMR (Optical Music Recognition)
+### Stage 13: OMR (Score branch only)
 
-**Checkpoint:** `12_omr/`
+**Checkpoint:** `13_omr/`
 
 Transcribes music pages into GABC notation using
 [ChantOMR](https://pgarciaq.github.io/chant-omr/), a deep learning model
@@ -273,15 +288,31 @@ warning.
 **Key configuration:** `[omr]` section: `model_dir`, `beam_width`,
 `device`. CLI: `--model-dir`.
 
-### Stage 13: PDF Assembly
+### Stage 14: Score Render
 
-**Checkpoint:** `13_pdf/`
+**Checkpoint:** `14_score_render/`
+
+Renders GABC files from the OMR stage into music notation images using
+Gregorio/LuaLaTeX:
+
+- Converts `.gabc` files into engraved notation images
+- Produces images suitable for inclusion as a score annex in the PDF
+
+**Status:** Not yet implemented.
+
+**Key configuration:** `[score_render]` section (TBD).
+
+### Stage 15: PDF Assembly
+
+**Checkpoint:** `15_pdf/`
 
 Assembles the final PDF from processed page images:
 
 - Uses `img2pdf` for lossless or JPEG-compressed assembly
 - Applies configured DPI for correct physical sizing
 - Names the output PDF after the input directory (e.g., `LPA-1.pdf`)
+- Combines book pages from the Book branch with rendered scores from
+  the Score branch as an annex
 
 This stage cannot be skipped.
 

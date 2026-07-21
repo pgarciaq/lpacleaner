@@ -35,11 +35,14 @@ _STAGE_LABELS = {
     "04": "4: Page Detect",
     "05": "5: Perspective",
     "06": "6: Content Area",
-    "07": "7: Deskew",
-    "08": "8: Dewarp",
-    "09": "9: Enhance",
-    "10": "10: Normalize",
-    "11": "11: OCR",
+    "07": "7: Staff Extract",
+    "08": "8: Deskew",
+    "09": "9: Dewarp",
+    "10": "10: Enhance",
+    "11": "11: Normalize",
+    "12": "12: OCR",
+    "13": "13: OMR",
+    "15": "15: PDF",
 }
 
 

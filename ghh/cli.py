@@ -307,7 +307,7 @@ def compare(output_dir, image_stem, input_dir, no_open):
 @click.option("--quality", type=int, default=85,
               help="JPEG compression quality (default: 85)")
 @click.option("--stages", "stage_spec", type=str, default=None,
-              help="Comma-separated stage numbers to include (e.g. '0,5,7')")
+              help="Comma-separated stage numbers to include (e.g. '0,5,8')")
 @click.option("--with-flipbook", is_flag=True, help="Include flipbook viewer")
 @click.option("--with-pdf", is_flag=True,
               help="Include PDF download in flipbook (implies --with-flipbook)")

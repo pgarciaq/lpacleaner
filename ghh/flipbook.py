@@ -53,7 +53,7 @@ def _find_source_images(output_dir: Path) -> list[Path]:
 
 
 def find_pdf(output_dir: Path) -> Path | None:
-    """Find the PDF in the output directory (produced by Stage 13)."""
+    """Find the PDF in the output directory (produced by Stage 15)."""
     for f in output_dir.iterdir():
         if f.is_file() and f.suffix.lower() == ".pdf":
             return f
@@ -145,7 +145,7 @@ def generate_flipbook(
             shutil.copy2(pdf_src, flipbook_dir / pdf_filename)
             logger.info("Copied PDF: %s", pdf_src.name)
         else:
-            logger.warning("No PDF found in %s/13_pdf/; omitting download link", output_dir)
+            logger.warning("No PDF found in %s/15_pdf/; omitting download link", output_dir)
 
     if dimensions:
         med_idx = len(dimensions) // 2

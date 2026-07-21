@@ -1,4 +1,4 @@
-"""Stage 14: Optical Music Recognition (OMR).
+"""Stage 13: Optical Music Recognition (OMR).
 
 Runs OpenVINO inference on music pages (as classified by stage 4
 PageDetect) and produces ``.gabc`` transcriptions alongside symlinked
@@ -41,8 +41,8 @@ _IMAGE_EXTENSIONS = frozenset((".png", ".jpg", ".jpeg", ".tiff", ".tif"))
 
 class OmrStage(BaseStage):
     name = "omr"
-    number = 12
-    checkpoint_name = "12_omr"
+    number = 13
+    checkpoint_name = "13_omr"
     error_class = "skippable"
     writes_image = False
 

@@ -80,10 +80,10 @@ class TestDeskewStageContract:
         assert DeskewStage().name == "deskew"
 
     def test_has_correct_number(self):
-        assert DeskewStage().number == 7
+        assert DeskewStage().number == 8
 
     def test_has_correct_checkpoint_name(self):
-        assert DeskewStage().checkpoint_name == "07_deskewed"
+        assert DeskewStage().checkpoint_name == "08_deskewed"
 
     def test_has_correct_error_class(self):
         assert DeskewStage().error_class == "skippable"
@@ -93,8 +93,8 @@ class TestDeskewStageContract:
 
     def test_registered_in_stage_registry(self):
         from ghh.stages import STAGE_BY_NUMBER
-        assert 7 in STAGE_BY_NUMBER
-        assert STAGE_BY_NUMBER[7] is DeskewStage
+        assert 8 in STAGE_BY_NUMBER
+        assert STAGE_BY_NUMBER[8] is DeskewStage
 
 
 # ---------------------------------------------------------------------------
@@ -259,8 +259,8 @@ class TestDeskewStageRun:
 
         stage.run(input_dir, output_dir, cfg, state)
 
-        assert (output_dir / "07_deskewed").exists()
-        pngs = list((output_dir / "07_deskewed").glob("*.png"))
+        assert (output_dir / "08_deskewed").exists()
+        pngs = list((output_dir / "08_deskewed").glob("*.png"))
         assert len(pngs) == 1
 
     def test_processes_multiple_images(self, tmp_path):
@@ -288,7 +288,7 @@ class TestDeskewStageRun:
 
         DeskewStage().run(input_dir, output_dir, cfg, state)
 
-        sidecar = output_dir / "07_deskewed" / "IMG_0001.json"
+        sidecar = output_dir / "08_deskewed" / "IMG_0001.json"
         assert sidecar.exists()
         meta = json.loads(sidecar.read_text())
         assert meta["stage"] == "deskew"

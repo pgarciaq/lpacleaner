@@ -466,7 +466,7 @@ class TestContentAreaConfig:
     def test_default_config_values(self):
         cfg = Config(input_dir=Path("/tmp"))
         assert cfg.content_detect_inset_fallback == 0.05
-        assert cfg.content_margin_padding == 0.02
+        assert cfg.content_margin_padding == 0.0
         assert cfg.content_feather_sigma == 20
 
     def test_config_from_toml(self, tmp_path):

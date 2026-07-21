@@ -210,7 +210,7 @@ Controls how ghh finds the content region within a cropped page.
 | `margin_padding` | float | 0.02 | Extra margin around detected content |
 | `feather_sigma` | integer | 20 | Gaussian feathering sigma for edge masking |
 
-### [deskew] -- Deskew (Stage 7)
+### [deskew] -- Deskew (Stage 8)
 
 Controls straightening of tilted pages.
 
@@ -244,7 +244,7 @@ show_through_removal = false   # disable for pages without show-through
 sharpen = false                # skip if already sharp
 ```
 
-### [pdf] -- PDF assembly (Stage 13)
+### [pdf] -- PDF assembly (Stage 15)
 
 Controls final PDF creation.
 
@@ -271,7 +271,7 @@ Controls the HTML flipbook viewer.
 | `engine` | string | `"tesseract"` | OCR engine (`"tesseract"` or `"kraken"`) |
 | `language` | string | `"lat"` | Language code for OCR |
 
-### [omr] -- Optical Music Recognition (Stage 12)
+### [omr] -- Optical Music Recognition (Stage 13)
 
 Controls OMR inference using [ChantOMR](https://pgarciaq.github.io/chant-omr/).
 Requires the `chant-omr` package to be installed separately.

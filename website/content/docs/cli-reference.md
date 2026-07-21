@@ -35,11 +35,11 @@ producing a clean PDF from raw photographs.
 | `--preview` | integer | 0 | Process only N images (0 = all) |
 | `--skip-content-area` | flag | | Skip content area detection (Stage 6) |
 | `--skip-dewarp` | flag | | Skip dewarping (Stage 8) |
-| `--skip-deskew` | flag | | Skip deskewing (Stage 7) |
+| `--skip-deskew` | flag | | Skip deskewing (Stage 8) |
 | `--skip-enhance` | flag | | Skip image enhancement (Stage 9) |
 | `--skip-normalize` | flag | | Skip cross-page normalization (Stage 10) |
 | `--skip-ocr` | flag | | Skip OCR (Stage 11) |
-| `--skip-omr` | flag | | Skip OMR (Stage 12) |
+| `--skip-omr` | flag | | Skip OMR (Stage 13) |
 | `--model-dir` | path | from config | Path to chant-omr OpenVINO model directory |
 | `--ai-dewarp` | flag | | Use AI-based dewarping |
 | `--binarize` | flag | | Binarize output images |
