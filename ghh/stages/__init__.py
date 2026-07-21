@@ -17,6 +17,8 @@ from ghh.stages.page_detect import PageDetectStage
 from ghh.stages.pdf_assembly import PDFAssemblyStage
 from ghh.stages.perspective import PerspectiveStage
 from ghh.stages.preprocess import PreprocessStage
+from ghh.stages.score_render import ScoreRenderStage
+from ghh.stages.staff_extract import StaffExtractStage
 from ghh.stages.stitch import StitchStage
 
 STAGE_CLASSES: list[type[BaseStage]] = [
@@ -27,8 +29,10 @@ STAGE_CLASSES: list[type[BaseStage]] = [
     PageDetectStage,    # 4
     PerspectiveStage,   # 5
     ContentAreaStage,   # 6
+    StaffExtractStage,  # 7
     DeskewStage,        # 8
     OmrStage,           # 13
+    ScoreRenderStage,   # 14
     PDFAssemblyStage,   # 15
 ]
 
@@ -36,6 +40,12 @@ STAGE_BY_NUMBER: dict[int, type[BaseStage]] = {s.number: s for s in STAGE_CLASSE
 STAGE_BY_NAME: dict[str, type[BaseStage]] = {s.name: s for s in STAGE_CLASSES}
 
 ALL_STAGE_NUMBERS: list[int] = sorted(STAGE_BY_NUMBER)
+
+# Stage groupings for the forked pipeline architecture
+COMMON_STAGE_NUMBERS = [0, 1, 2, 3, 4, 5]
+BOOK_STAGE_NUMBERS = [8]  # only deskew implemented so far; will grow: 8, 9, 10, 11, 12
+SCORE_STAGE_NUMBERS = [6, 7, 8, 13]  # content area, staff extract, deskew, omr
+FINAL_STAGE_NUMBERS = [14, 15]  # score render + pdf assembly
 
 
 def get_stages(numbers: list[int] | None = None) -> list[BaseStage]:

@@ -6,24 +6,27 @@ Loading priority: CLI args > book.toml > profile defaults > built-in defaults
 from __future__ import annotations
 
 import logging
-import sys
-from dataclasses import dataclass, field, fields
+import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
 # Stages that each profile SKIPS (everything not listed runs).
 _PROFILE_SKIPS: dict[str, set[str]] = {
     "full": set(),
-    "geometry": {"content_area", "dewarp", "deskew", "enhance", "normalize", "ocr", "omr"},
-    "clean": {"ocr"},
-    "quick": {"content_area", "dewarp", "deskew", "normalize", "ocr", "omr"},
+    "book-only": {"content_area", "staff_extract", "omr"},
+    "scores-only": {"ocr"},
+    "geometry": {
+        "content_area", "staff_extract", "dewarp", "deskew",
+        "enhance", "normalize", "ocr", "omr",
+    },
+    "clean": {"ocr", "omr"},
+    "quick": {
+        "content_area", "staff_extract", "dewarp", "deskew",
+        "normalize", "ocr", "omr",
+    },
 }
 
 _MANDATORY_STAGES = {"orientation", "page_detect", "perspective", "pdf_assembly"}
@@ -40,6 +43,8 @@ class Config:
     input_dir: Path
     output_dir: Path | None = None
     profile: str = "full"
+    book_only: bool = False
+    scores_only: bool = False
     preview: int = 0
     use_gpu: bool = True
     ai_dewarp: bool = False
@@ -145,6 +150,9 @@ class Config:
     omr_device: str = "AUTO"
     skip_omr: bool = False
 
+    # Branch-specific overrides (private; populated by from_toml)
+    _branch_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
+
     # Enhance sub-step toggles
     enhance_color_cast: bool = True
     enhance_illumination: bool = True
@@ -164,6 +172,23 @@ class Config:
             self.output_dir = self.input_dir.parent / f"{self.input_dir.name}_output"
         else:
             self.output_dir = Path(self.output_dir)
+
+    def for_branch(self, branch_name: str) -> Config:
+        """Return a copy with branch-specific overrides merged in.
+
+        Branch overrides come from TOML sections like [book.deskew] or
+        [score.enhance], flattened to attribute names like deskew_max_angle.
+        """
+        import dataclasses
+
+        overrides = self._branch_overrides.get(branch_name, {})
+        copy = dataclasses.replace(self)
+        for attr_name, value in overrides.items():
+            if hasattr(copy, attr_name):
+                setattr(copy, attr_name, value)
+            else:
+                logger.warning("Unknown branch override: %s.%s", branch_name, attr_name)
+        return copy
 
     def should_skip_stage(self, stage_name: str) -> bool:
         """Return True if a stage should be skipped based on profile + explicit flags.
@@ -330,6 +355,21 @@ class Config:
         _map_if_present(kwargs, condition, "foxing_severity", "foxing_severity")
         _map_if_present(kwargs, condition, "iron_gall_halos", "iron_gall_halos")
         _map_if_present(kwargs, condition, "salt_deposits", "salt_deposits")
+
+        # Branch-specific overrides: [book.*] and [score.*]
+        branch_overrides: dict[str, dict[str, Any]] = {}
+        for branch_name in ("book", "score"):
+            branch_data = toml_data.get(branch_name, {})
+            if isinstance(branch_data, dict):
+                flat: dict[str, Any] = {}
+                for section_name, section_vals in branch_data.items():
+                    if isinstance(section_vals, dict):
+                        for key, val in section_vals.items():
+                            flat[f"{section_name}_{key}"] = val
+                if flat:
+                    branch_overrides[branch_name] = flat
+        if branch_overrides:
+            kwargs["_branch_overrides"] = branch_overrides
 
         # CLI overrides take top priority
         if overrides:

@@ -46,6 +46,8 @@ def stages():
 @click.option("--profile", type=click.Choice(["full", "geometry", "clean", "quick"]),
               default="full")
 @click.option("--preview", type=int, default=0, help="Process only N images")
+@click.option("--book-only", is_flag=True, help="Run only the book branch (skip score branch)")
+@click.option("--scores-only", is_flag=True, help="Run only the score branch (skip book branch)")
 @click.option("--skip-dewarp", is_flag=True)
 @click.option("--skip-deskew", is_flag=True)
 @click.option("--skip-enhance", is_flag=True)
@@ -63,23 +65,28 @@ def stages():
 @click.option("-v", "--verbose", is_flag=True)
 @click.option("-q", "--quiet", is_flag=True)
 def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
+        book_only, scores_only,
         skip_dewarp, skip_deskew, skip_enhance, skip_normalize, skip_ocr,
         skip_omr, skip_content_area, model_dir, ai_dewarp, binarize,
         cleanup, on_error, jobs, verbose, quiet):
     """Process book page photos through the pipeline.
 
-    Runs all implemented stages by default.  Use --stages to select specific
-    stages (e.g. ``--stages 0-2`` for preprocess, stitch, orientation).
+    The pipeline has three phases: common preparation (stages 0-5),
+    two parallel branches (book and score), and finalization (stages 14-15).
+
+    Use --book-only or --scores-only to run a single branch.
+    Use --stages to select specific stages (e.g. ``--stages 0-2``).
     """
     import os
 
-    from tqdm import tqdm
-
     from ghh.config import Config
-    from ghh.pipeline import BaseStage, PipelineState
+    from ghh.pipeline import PipelineState
     from ghh.stages import get_stages, parse_stage_spec
 
     _configure_logging(verbose, quiet)
+
+    if book_only and scores_only:
+        raise click.UsageError("Cannot use both --book-only and --scores-only")
 
     if jobs is None:
         jobs = max(1, (os.cpu_count() or 2) // 2)
@@ -96,6 +103,8 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
         "output_dir": output_path,
         "profile": profile,
         "preview": preview,
+        "book_only": book_only,
+        "scores_only": scores_only,
         "skip_dewarp": skip_dewarp,
         "skip_deskew": skip_deskew,
         "skip_enhance": skip_enhance,
@@ -114,32 +123,74 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
         overrides["omr_model_dir"] = model_dir
     cfg = Config.from_toml(input_path, toml_path=config_path, overrides=overrides)
 
+    # If user specified explicit stages, use flat (non-branched) execution
     if stage_spec is not None:
         stage_numbers = parse_stage_spec(stage_spec)
+        try:
+            selected = get_stages(stage_numbers)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="--stages") from exc
+        state = PipelineState.load(output_path)
+        total_p, total_f = _run_stage_list(
+            selected, input_path, output_path, cfg, state, jobs, quiet,
+        )
     else:
-        stage_numbers = None
+        state = PipelineState.load(output_path)
+        total_p, total_f = _run_forked_pipeline(
+            input_path, output_path, cfg, state, jobs, quiet,
+            book_only=book_only, scores_only=scores_only,
+        )
+
+    click.echo(f"Done. {total_p} images processed, {total_f} failures.")
 
     try:
-        stages = get_stages(stage_numbers)
-    except ValueError as exc:
-        raise click.BadParameter(str(exc), param_hint="--stages") from exc
+        from ghh.compare import write_compare_html
+        html_path = write_compare_html(output_path, input_path)
+        click.echo(f"Comparison viewer: {html_path}")
+    except Exception as exc:
+        logger.debug("Could not generate comparison HTML: %s", exc)
 
-    state = PipelineState.load(output_path)
+    if total_f and on_error == "stop":
+        sys.exit(1)
 
+
+def _run_stage_list(
+    stages: list,
+    input_path: Path,
+    output_path: Path,
+    cfg,
+    state,
+    jobs: int,
+    quiet: bool,
+    branch_dir: Path | None = None,
+) -> tuple[int, int]:
+    """Run a flat list of stages sequentially (legacy / explicit --stages mode).
+
+    When *branch_dir* is set, checkpoint directories are created under
+    that subdirectory (e.g. ``output/book/``) and previous-checkpoint
+    lookup starts there before falling back to the common output root.
+    """
+    import click
+    from tqdm import tqdm
+
+    from ghh.pipeline import BaseStage
+
+    effective_output = branch_dir if branch_dir else output_path
     total_processed = 0
     total_failed = 0
 
     for stage in stages:
         if stage.should_skip(cfg):
-            click.echo(f"  Skipping stage {stage.number} ({stage.name}) [profile={profile}]")
+            click.echo(f"  Skipping stage {stage.number} ({stage.name})")
             continue
 
-        # Determine input directory: first stage reads from input_dir,
-        # subsequent stages read from the previous stage's checkpoint.
         if stage.number == 0:
             stage_input = input_path
         else:
-            prev = _find_previous_checkpoint(stage.number, stages, output_path)
+            prev = _find_previous_checkpoint(
+                stage.number, stages, effective_output,
+                fallback_dir=output_path if branch_dir else None,
+            )
             if prev is None:
                 click.echo(
                     f"  Stage {stage.number} ({stage.name}): "
@@ -156,7 +207,7 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
             disable=quiet, leave=True,
         )
         result = stage.run(
-            stage_input, output_path, cfg, state,
+            stage_input, effective_output, cfg, state,
             progress_callback=bar.update,
             max_workers=jobs,
         )
@@ -172,28 +223,108 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
             f"failed={result.failed} excluded={result.excluded}"
         )
 
-    click.echo(f"Done. {total_processed} images processed, {total_failed} failures.")
+    return total_processed, total_failed
 
-    try:
-        from ghh.compare import write_compare_html
-        html_path = write_compare_html(output_path, input_path)
-        click.echo(f"Comparison viewer: {html_path}")
-    except Exception as exc:
-        logger.debug("Could not generate comparison HTML: %s", exc)
 
-    if total_failed and on_error == "stop":
-        sys.exit(1)
+def _run_forked_pipeline(
+    input_path: Path,
+    output_path: Path,
+    cfg,
+    state,
+    jobs: int,
+    quiet: bool,
+    book_only: bool = False,
+    scores_only: bool = False,
+) -> tuple[int, int]:
+    """Execute the three-phase forked pipeline."""
+    import click
+
+    from ghh.stages import (
+        BOOK_STAGE_NUMBERS,
+        COMMON_STAGE_NUMBERS,
+        FINAL_STAGE_NUMBERS,
+        SCORE_STAGE_NUMBERS,
+        get_stages,
+    )
+
+    total_p = 0
+    total_f = 0
+
+    # Phase 1: Common stages (0-5)
+    common_stages = get_stages(
+        [n for n in COMMON_STAGE_NUMBERS if n in _implemented_numbers()]
+    )
+    if common_stages:
+        click.echo("─── Common preparation ───")
+        p, f = _run_stage_list(
+            common_stages, input_path, output_path, cfg, state, jobs, quiet,
+        )
+        total_p += p
+        total_f += f
+
+    # Phase 2: Branches
+    if not scores_only:
+        book_nums = [n for n in BOOK_STAGE_NUMBERS if n in _implemented_numbers()]
+        if book_nums:
+            book_stages = get_stages(book_nums)
+            book_dir = output_path / "book"
+            book_dir.mkdir(parents=True, exist_ok=True)
+            cfg_book = cfg.for_branch("book")
+            click.echo("─── Book branch (full page) ───")
+            p, f = _run_stage_list(
+                book_stages, input_path, output_path, cfg_book, state, jobs, quiet,
+                branch_dir=book_dir,
+            )
+            total_p += p
+            total_f += f
+
+    if not book_only:
+        score_nums = [n for n in SCORE_STAGE_NUMBERS if n in _implemented_numbers()]
+        if score_nums:
+            score_stages = get_stages(score_nums)
+            score_dir = output_path / "score"
+            score_dir.mkdir(parents=True, exist_ok=True)
+            cfg_score = cfg.for_branch("score")
+            click.echo("─── Score branch (content area) ───")
+            p, f = _run_stage_list(
+                score_stages, input_path, output_path, cfg_score, state, jobs, quiet,
+                branch_dir=score_dir,
+            )
+            total_p += p
+            total_f += f
+
+    # Phase 3: Finalization
+    final_nums = [n for n in FINAL_STAGE_NUMBERS if n in _implemented_numbers()]
+    if final_nums:
+        final_stages = get_stages(final_nums)
+        click.echo("─── Finalization ───")
+        p, f = _run_stage_list(
+            final_stages, input_path, output_path, cfg, state, jobs, quiet,
+        )
+        total_p += p
+        total_f += f
+
+    return total_p, total_f
+
+
+def _implemented_numbers() -> set[int]:
+    """Return the set of currently implemented stage numbers."""
+    from ghh.stages import STAGE_BY_NUMBER
+    return set(STAGE_BY_NUMBER.keys())
 
 
 def _find_previous_checkpoint(
     current_number: int,
     stages: list,
     output_path: Path,
+    fallback_dir: Path | None = None,
 ) -> Path | None:
     """Find the checkpoint directory from the preceding stage.
 
     Walks backward from *current_number* looking for an existing checkpoint
-    directory, regardless of whether that stage was in the current run.
+    directory. When *fallback_dir* is set (branch execution), also checks
+    the common output root for cross-phase continuity (e.g. score branch
+    stage 6 reads from common ``05_perspective/``).
     """
     from ghh.stages import STAGE_BY_NUMBER
 
@@ -201,9 +332,15 @@ def _find_previous_checkpoint(
         cls = STAGE_BY_NUMBER.get(n)
         if cls is None:
             continue
+        # Check primary directory first
         candidate = output_path / cls.checkpoint_name
         if candidate.is_dir() and any(candidate.iterdir()):
             return candidate
+        # Check fallback (common output root) for branch entry points
+        if fallback_dir is not None:
+            fallback_candidate = fallback_dir / cls.checkpoint_name
+            if fallback_candidate.is_dir() and any(fallback_candidate.iterdir()):
+                return fallback_candidate
     return None
 
 

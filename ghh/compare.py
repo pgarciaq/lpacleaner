@@ -42,6 +42,7 @@ _STAGE_LABELS = {
     "11": "11: Normalize",
     "12": "12: OCR",
     "13": "13: OMR",
+    "14": "14: Score Render",
     "15": "15: PDF",
 }
 
@@ -77,6 +78,17 @@ def discover_book(
         if d.is_dir() and _CHECKPOINT_RE.match(d.name)
     )
 
+    # Also discover branch subdirectories (book/, score/)
+    for branch_name in ("book", "score"):
+        branch_dir = output_dir / branch_name
+        if branch_dir.is_dir():
+            for d in sorted(branch_dir.iterdir()):
+                if d.is_dir() and _CHECKPOINT_RE.match(d.name):
+                    checkpoint_dirs.append(d)
+
+    # Re-sort all checkpoint dirs by their numeric prefix
+    checkpoint_dirs.sort(key=lambda d: (d.parent.name if d.parent != output_dir else "", d.name))
+
     stage_labels: list[str] = []
     stage_dirs: list[Path | None] = []
 
@@ -86,7 +98,12 @@ def discover_book(
 
     for d in checkpoint_dirs:
         num = d.name[:2]
-        label = _STAGE_LABELS.get(num, f"{int(num)}: {d.name[3:]}")
+        base_label = _STAGE_LABELS.get(num, f"{int(num)}: {d.name[3:]}")
+        # Qualify label with branch name when inside a branch subdir
+        if d.parent.name in ("book", "score"):
+            label = f"{base_label} [{d.parent.name}]"
+        else:
+            label = base_label
         stage_labels.append(label)
         stage_dirs.append(d)
 
@@ -214,6 +231,16 @@ def publish_book(
         if d.is_dir() and _CHECKPOINT_RE.match(d.name)
     )
 
+    # Also discover branch subdirectories (book/, score/)
+    for branch_name in ("book", "score"):
+        branch_dir = output_dir / branch_name
+        if branch_dir.is_dir():
+            for d in sorted(branch_dir.iterdir()):
+                if d.is_dir() and _CHECKPOINT_RE.match(d.name):
+                    checkpoint_dirs.append(d)
+
+    checkpoint_dirs.sort(key=lambda d: (d.parent.name if d.parent != output_dir else "", d.name))
+
     stage_labels: list[str] = []
     stage_dirs: list[tuple[str, Path]] = []
 
@@ -227,9 +254,15 @@ def publish_book(
         num = d.name[:2]
         if stage_filter is not None and num not in stage_filter:
             continue
-        label = _STAGE_LABELS.get(num, f"{int(num)}: {d.name[3:]}")
+        base_label = _STAGE_LABELS.get(num, f"{int(num)}: {d.name[3:]}")
+        if d.parent.name in ("book", "score"):
+            label = f"{base_label} [{d.parent.name}]"
+            folder_name = f"{d.parent.name}_{d.name}"
+        else:
+            label = base_label
+            folder_name = d.name
         stage_labels.append(label)
-        stage_dirs.append((d.name, d))
+        stage_dirs.append((folder_name, d))
 
     all_stems: dict[str, None] = {}
     for _, d in stage_dirs:
