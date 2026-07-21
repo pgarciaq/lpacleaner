@@ -44,8 +44,8 @@ ALL_STAGE_NUMBERS: list[int] = sorted(STAGE_BY_NUMBER)
 # Stage groupings for the forked pipeline architecture
 COMMON_STAGE_NUMBERS = [0, 1, 2, 3, 4, 5]
 BOOK_STAGE_NUMBERS = [8]  # only deskew implemented so far; will grow: 8, 9, 10, 11, 12
-SCORE_STAGE_NUMBERS = [6, 7, 8, 13]  # content area, staff extract, deskew, omr
-FINAL_STAGE_NUMBERS = [14, 15]  # score render + pdf assembly
+SCORE_STAGE_NUMBERS = [6, 7, 8, 13, 14]  # content area, staff extract, deskew, omr, score render
+FINAL_STAGE_NUMBERS = [15]  # pdf assembly
 
 
 def get_stages(numbers: list[int] | None = None) -> list[BaseStage]:

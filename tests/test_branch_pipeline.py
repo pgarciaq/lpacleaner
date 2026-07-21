@@ -179,10 +179,11 @@ class TestStageGroupings:
         assert 6 in SCORE_STAGE_NUMBERS
         assert 7 in SCORE_STAGE_NUMBERS
         assert 13 in SCORE_STAGE_NUMBERS
+        assert 14 in SCORE_STAGE_NUMBERS
 
     def test_final_stages(self):
         from ghh.stages import FINAL_STAGE_NUMBERS
-        assert 14 in FINAL_STAGE_NUMBERS
+        assert 14 not in FINAL_STAGE_NUMBERS
         assert 15 in FINAL_STAGE_NUMBERS
 
     def test_no_stage_in_multiple_groups(self):
