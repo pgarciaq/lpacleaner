@@ -2350,8 +2350,8 @@ Only one place, only when explicitly requested:
 - **Stage 8 dewarp, AI path** (`--ai-dewarp`): DocTr GeoTr model,
   converted to OpenVINO IR (FP16), runs on Intel Arc GPU. Used as
   fallback when classical dewarping finds fewer than 2 staff lines
-  (text-only pages, decorative pages). Requires `openvino` and
-  `torch` packages (optional dependency group `ai`).
+  (text-only pages, decorative pages). Requires `openvino` (optional
+  dependency group `ai`). See [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ### Where AI/ML Could Add Value (Not Currently Implemented)
 
@@ -2685,15 +2685,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ai = ["openvino>=2024.0", "torch>=2.0"]
-historical-ocr = ["kraken>=5.0"]
-dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+ai = ["openvino>=2024.0"]
+omr = ["openvino>=2024.0"]
+historical-ocr = ["kraken>=5.0; python_version<'3.14'"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.4"]
 
 [project.scripts]
 ghh = "ghh.cli:main"
 ```
 
-System packages: `tesseract`, `tesseract-langpack-lat` (via `dnf`)
+**Python extras:** `ai` (DocTr dewarp), `omr` (chant-omr inference) — both use OpenVINO only at runtime.
+
+**Fedora RPMs:** `tesseract`, `tesseract-langpack-lat`; `intel-compute-runtime`, `oneapi-level-zero` for Intel Arc GPU. See [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ---
 
