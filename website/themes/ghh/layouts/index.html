@@ -224,10 +224,11 @@
   <div class="section-inner">
     <h2 class="section-title">The Pipeline</h2>
     <p class="section-subtitle">
-      A modular, checkpointed pipeline of 14 stages. Each stage writes its
-      output to a numbered directory, enabling inspection and resumability.
+      A modular, checkpointed pipeline that forks into two specialized branches
+      after common preparation: one for book production, one for music score extraction.
     </p>
 
+    <div class="pipeline-phase-label">Common Preparation</div>
     <div class="pipeline-stages pipeline-row">
       <div class="stage-chip done"><span class="stage-dot"></span> 0&ensp;Preprocess</div>
       <span class="pipeline-arrow">&rarr;</span>
@@ -238,26 +239,52 @@
       <div class="stage-chip done"><span class="stage-dot"></span> 3&ensp;Lens Correct</div>
       <span class="pipeline-arrow">&rarr;</span>
       <div class="stage-chip done"><span class="stage-dot"></span> 4&ensp;Page Detect</div>
-    </div>
-    <div class="pipeline-stages pipeline-row">
+      <span class="pipeline-arrow">&rarr;</span>
       <div class="stage-chip done"><span class="stage-dot"></span> 5&ensp;Perspective</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip pending"><span class="stage-dot"></span> 6&ensp;Content Area</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Enhance</div>
     </div>
+
+    <div class="pipeline-fork">&darr; fork &darr;</div>
+
+    <div class="pipeline-branches">
+      <div class="pipeline-branch branch-book">
+        <div class="pipeline-branch-label">Book Branch <span class="branch-desc">(full page &rarr; PDF)</span></div>
+        <div class="pipeline-stages pipeline-row">
+          <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Enhance</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 11&ensp;OCR</div>
+        </div>
+      </div>
+      <div class="pipeline-branch branch-score">
+        <div class="pipeline-branch-label">Score Branch <span class="branch-desc">(content area &rarr; GABC)</span></div>
+        <div class="pipeline-stages pipeline-row">
+          <div class="stage-chip pending"><span class="stage-dot"></span> 6&ensp;Content Area</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 9&ensp;Enhance</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+          <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip done"><span class="stage-dot"></span> 12&ensp;OMR</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline-fork">&darr; merge &darr;</div>
+
+    <div class="pipeline-phase-label">Finalization</div>
     <div class="pipeline-stages pipeline-row">
-      <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Normalize</div>
+      <div class="stage-chip not-started"><span class="stage-dot"></span> 13&ensp;Score Render</div>
       <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip not-started"><span class="stage-dot"></span> 11&ensp;OCR</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip done"><span class="stage-dot"></span> 12&ensp;OMR</div>
-      <span class="pipeline-arrow">&rarr;</span>
-      <div class="stage-chip done"><span class="stage-dot"></span> 13&ensp;PDF</div>
+      <div class="stage-chip done"><span class="stage-dot"></span> 14&ensp;PDF</div>
     </div>
 
     <div class="pipeline-legend">
@@ -276,6 +303,17 @@
       The core geometry pipeline is complete. Here is what comes next.
     </p>
     <div class="roadmap-items">
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge next">Next</span>
+        <h3>Forked Pipeline Architecture</h3>
+        <p>
+          The pipeline forks after perspective correction into two branches:
+          a <strong>Book branch</strong> (full-page processing for PDF production)
+          and a <strong>Score branch</strong> (content-area extraction for OMR).
+          Each branch applies its own parameters for deskew, dewarp, and enhancement.
+        </p>
+      </div>
 
       <div class="roadmap-card">
         <span class="roadmap-badge next">Next</span>
@@ -325,6 +363,17 @@
           into machine-readable <a href="https://gregorio-project.github.io/gabc/" style="color: var(--gold-light);">GABC</a>
           notation using <a href="https://pgarciaq.github.io/chant-omr/" style="color: var(--gold-light);">ChantOMR</a>&mdash;a
           specialist deep learning model deployed via OpenVINO.
+          Runs in the Score branch on content-area-cropped images for best accuracy.
+        </p>
+      </div>
+
+      <div class="roadmap-card">
+        <span class="roadmap-badge future">Future</span>
+        <h3>Stage 13: Score Render</h3>
+        <p>
+          Renders GABC transcriptions into publication-quality Gregorian notation
+          using <a href="https://gregorio-project.github.io/" style="color: var(--gold-light);">Gregorio</a>,
+          producing typeset score pages appended as an annex to the final PDF.
         </p>
       </div>
 

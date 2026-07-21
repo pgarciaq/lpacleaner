@@ -318,6 +318,55 @@ section {
   font-size: 1.2rem;
 }
 
+.pipeline-phase-label {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-light);
+  margin-bottom: 0.5rem;
+}
+.pipeline-fork {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--parchment-dark);
+  margin: 0.5rem 0;
+}
+.pipeline-branches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+.pipeline-branch {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+.branch-book { border-color: rgba(90,160,220,0.3); background: rgba(90,160,220,0.04); }
+.branch-score { border-color: rgba(180,140,60,0.3); background: rgba(180,140,60,0.04); }
+.pipeline-branch-label {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+.branch-book .pipeline-branch-label { color: #6baadc; }
+.branch-score .pipeline-branch-label { color: #d4a843; }
+.branch-desc {
+  font-weight: 400;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.pipeline-branch .pipeline-stages {
+  margin-bottom: 0;
+}
+@media (max-width: 900px) {
+  .pipeline-branches { grid-template-columns: 1fr; }
+}
+
 .pipeline-legend {
   display: flex; gap: 2rem;
   justify-content: center;
