@@ -265,6 +265,8 @@
         <div class="pipeline-stages pipeline-row">
           <div class="stage-chip pending"><span class="stage-dot"></span> 6&ensp;Content Area</div>
           <span class="pipeline-arrow">&rarr;</span>
+          <div class="stage-chip not-started"><span class="stage-dot"></span> Staff Extract</div>
+          <span class="pipeline-arrow">&rarr;</span>
           <div class="stage-chip pending"><span class="stage-dot"></span> 7&ensp;Deskew</div>
           <span class="pipeline-arrow">&rarr;</span>
           <div class="stage-chip not-started"><span class="stage-dot"></span> 8&ensp;Dewarp</div>
@@ -311,6 +313,8 @@
           The pipeline forks after perspective correction into two branches:
           a <strong>Book branch</strong> (full-page processing for PDF production)
           and a <strong>Score branch</strong> (content-area extraction for OMR).
+          The Score branch includes a Staff Extract stage that isolates music
+          staff regions, removing illustrations and decorative elements before OMR.
           Each branch applies its own parameters for deskew, dewarp, and enhancement.
         </p>
       </div>
