@@ -110,6 +110,7 @@ class Config:
     # Perspective validation (Stage 5)
     perspective_max_skew_deg: float = 5.0
     perspective_max_crop_frac: float = 0.30
+    perspective_output_padding_frac: float = 0.02
 
     # Deskew (Stage 8)
     deskew_max_angle: float = 5.0

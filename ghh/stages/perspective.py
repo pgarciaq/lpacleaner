@@ -105,8 +105,12 @@ class PerspectiveStage(BaseStage):
                 meta["page_type"] = metadata["page_type"]
             return img, meta
 
+        # Apply padding to prevent edge content clipping
+        pad_x = int(width * cfg.perspective_output_padding_frac)
+        pad_y = int(height * cfg.perspective_output_padding_frac)
         dst = np.array(
-            [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
+            [[pad_x, pad_y], [width - 1 - pad_x, pad_y],
+             [width - 1 - pad_x, height - 1 - pad_y], [pad_x, height - 1 - pad_y]],
             dtype=np.float32,
         )
 

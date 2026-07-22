@@ -211,6 +211,24 @@ class TestQuadValidation:
         result = _should_skip_warp(4, 3.0, 0.10, 5.0, 0.30)
         assert result is None
 
+    def test_perspective_applies_output_padding(self):
+        from ghh.stages.perspective import PerspectiveStage
+
+        stage = PerspectiveStage()
+        img = np.full((1000, 800, 3), 128, dtype=np.uint8)
+        cfg = Config(input_dir=Path("/tmp"), perspective_output_padding_frac=0.02)
+
+        quad = [[100, 100], [700, 100], [700, 900], [100, 900]]
+        metadata = {"quad_corners": quad, "page_type": "music"}
+        result, meta = stage.process_image(img, metadata, cfg)
+
+        # Output should be larger than the quad-derived dimensions due to padding
+        assert meta["dst_size"][0] == 600  # width
+        assert meta["dst_size"][1] == 800  # height
+        # Result should have padding applied (smaller effective content area)
+        assert result.shape[1] == 600
+        assert result.shape[0] == 800
+
 
 class TestPerspectiveUnreliablePassthrough:
     """Test that unreliable quads trigger passthrough."""
