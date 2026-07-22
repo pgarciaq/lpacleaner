@@ -32,6 +32,7 @@ region.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -44,6 +45,253 @@ from ghh.utils.line_detect import detect_staff_lines
 logger = logging.getLogger(__name__)
 
 _STAFF_LINE_THRESHOLD = 4
+
+
+# ---------------------------------------------------------------------------
+# Page border detection
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PageBorders:
+    """Detected page border line positions."""
+    left_x: float | None = None
+    right_x: float | None = None
+    top_y: float | None = None
+    bottom_y: float | None = None
+    confidence: float = 0.0
+
+
+_BORDER_MIN_SPAN_FRAC = 0.30
+_BORDER_CLUSTER_GAP_PX = 20
+_BORDER_EDGE_MARGIN_FRAC = 0.35
+_BORDER_OFFSET_PX = 3
+
+
+def _detect_page_borders(
+    img: np.ndarray,
+    cfg: Config,
+) -> PageBorders:
+    """Detect red page border lines via HSV segmentation + Hough lines.
+
+    Returns a ``PageBorders`` with the x-positions of the leftmost and
+    rightmost vertical border lines, and optionally the y-positions of
+    horizontal borders.  ``confidence`` reflects how many line segments
+    support the detection.
+    """
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    # Red spans both ends of the hue circle (OpenCV H: 0-180)
+    mask_lo = cv2.inRange(hsv, (0, 40, 50), (15, 255, 255))
+    mask_hi = cv2.inRange(hsv, (165, 40, 50), (180, 255, 255))
+    red_mask = cv2.bitwise_or(mask_lo, mask_hi)
+
+    # Close small gaps where neumes/text cross the border lines
+    k_close = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15))
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, k_close)
+
+    # Thin the mask so Hough detects single lines
+    k_erode = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1))
+    red_mask = cv2.erode(red_mask, k_erode, iterations=1)
+
+    min_line_len = int(h * 0.08)
+    lines = cv2.HoughLinesP(
+        red_mask, rho=1, theta=np.pi / 180,
+        threshold=40, minLineLength=min_line_len, maxLineGap=30,
+    )
+    if lines is None:
+        return PageBorders()
+
+    segments = lines.reshape(-1, 4)
+
+    vert_segs: list[tuple[float, float, float, float]] = []
+    horiz_segs: list[tuple[float, float, float, float]] = []
+
+    for x1, y1, x2, y2 in segments:
+        dx, dy = float(x2 - x1), float(y2 - y1)
+        length = np.hypot(dx, dy)
+        if length < 1:
+            continue
+        angle = abs(np.degrees(np.arctan2(dx, dy)))
+        if angle < 15 or angle > 165:
+            vert_segs.append((float(x1 + x2) / 2, length,
+                              min(float(y1), float(y2)),
+                              max(float(y1), float(y2))))
+        elif 75 < angle < 105:
+            horiz_segs.append((float(y1 + y2) / 2, length,
+                               min(float(x1), float(x2)),
+                               max(float(x1), float(x2))))
+
+    left_x = _cluster_border_lines(
+        vert_segs, w, h, side="left",
+    )
+    right_x = _cluster_border_lines(
+        vert_segs, w, h, side="right",
+    )
+    top_y = _cluster_border_lines(
+        horiz_segs, h, w, side="left",
+    )
+    bottom_y = _cluster_border_lines(
+        horiz_segs, h, w, side="right",
+    )
+
+    n_found = sum(1 for v in (left_x, right_x, top_y, bottom_y) if v is not None)
+    has_pair = (left_x is not None and right_x is not None)
+    confidence = 0.0
+    if has_pair:
+        confidence = 0.8
+        if top_y is not None or bottom_y is not None:
+            confidence = 0.9
+        if top_y is not None and bottom_y is not None:
+            confidence = 1.0
+    elif n_found == 1:
+        confidence = 0.3
+
+    return PageBorders(
+        left_x=left_x, right_x=right_x,
+        top_y=top_y, bottom_y=bottom_y,
+        confidence=confidence,
+    )
+
+
+def _cluster_border_lines(
+    segments: list[tuple[float, float, float, float]],
+    span: int,
+    cross_span: int,
+    side: str,
+) -> float | None:
+    """Cluster line segments by position and return the best border.
+
+    *segments* is a list of ``(position, length, cross_min, cross_max)``
+    tuples.  *span* is the image dimension along which position varies
+    (width for vertical lines, height for horizontal lines).
+    *cross_span* is the other dimension (used for minimum coverage).
+    *side* is ``"left"`` (pick cluster closest to 0) or ``"right"``
+    (pick cluster closest to *span*).
+
+    A cluster must satisfy two conditions to qualify:
+    - total segment length >= *cross_span* * ``_BORDER_MIN_SPAN_FRAC``
+    - coverage (cross_max - cross_min) >= *cross_span* * ``_BORDER_MIN_SPAN_FRAC``
+      to reject compact blobs (e.g. red initials)
+
+    Returns the weighted-mean position of the best cluster, or None.
+    """
+    if not segments:
+        return None
+
+    edge_margin = span * _BORDER_EDGE_MARGIN_FRAC
+    min_total = cross_span * _BORDER_MIN_SPAN_FRAC
+    min_coverage = cross_span * _BORDER_MIN_SPAN_FRAC
+
+    sorted_segs = sorted(segments, key=lambda s: s[0])
+
+    clusters: list[list[tuple[float, float, float, float]]] = []
+    current: list[tuple[float, float, float, float]] = [sorted_segs[0]]
+
+    for seg in sorted_segs[1:]:
+        if seg[0] - current[-1][0] <= _BORDER_CLUSTER_GAP_PX:
+            current.append(seg)
+        else:
+            clusters.append(current)
+            current = [seg]
+    clusters.append(current)
+
+    candidates: list[tuple[float, float]] = []
+    for cluster in clusters:
+        total_len = sum(s[1] for s in cluster)
+        if total_len < min_total:
+            continue
+        cross_min = min(s[2] for s in cluster)
+        cross_max = max(s[3] for s in cluster)
+        coverage = cross_max - cross_min
+        if coverage < min_coverage:
+            continue
+        weighted_pos = (
+            sum(s[0] * s[1] for s in cluster) / total_len
+        )
+        if side == "left" and weighted_pos > edge_margin:
+            continue
+        if side == "right" and weighted_pos < span - edge_margin:
+            continue
+        candidates.append((weighted_pos, total_len))
+
+    if not candidates:
+        return None
+
+    if side == "left":
+        best = min(candidates, key=lambda c: c[0])
+    else:
+        best = max(candidates, key=lambda c: c[0])
+
+    return best[0]
+
+
+def _refine_quad_with_borders(
+    quad: np.ndarray,
+    borders: PageBorders,
+    img_h: int,
+    img_w: int,
+    confidence_threshold: float,
+) -> tuple[np.ndarray, bool]:
+    """Clip the quad edges inward to the detected page border lines.
+
+    Only adjusts quad edges that extend **beyond** the detected border
+    (i.e., into non-page areas like fore edges or desk).  Edges that
+    are already inside the border are left unchanged.
+
+    A small outward offset (``_BORDER_OFFSET_PX``) is added so the red
+    border line itself is included in the output.
+
+    Returns ``(refined_quad, applied)`` where *applied* is True if any
+    edge was actually adjusted.
+    """
+    if borders.confidence < confidence_threshold:
+        return quad, False
+
+    refined = quad.copy()
+    applied = False
+
+    # TL=0, TR=1, BR=2, BL=3 (after order_corners)
+    if borders.left_x is not None:
+        lx = borders.left_x - _BORDER_OFFSET_PX
+        if refined[0][0] < lx:
+            refined[0][0] = lx
+            applied = True
+        if refined[3][0] < lx:
+            refined[3][0] = lx
+            applied = True
+
+    if borders.right_x is not None:
+        rx = borders.right_x + _BORDER_OFFSET_PX
+        if refined[1][0] > rx:
+            refined[1][0] = rx
+            applied = True
+        if refined[2][0] > rx:
+            refined[2][0] = rx
+            applied = True
+
+    if borders.top_y is not None:
+        ty = borders.top_y - _BORDER_OFFSET_PX
+        if refined[0][1] < ty:
+            refined[0][1] = ty
+            applied = True
+        if refined[1][1] < ty:
+            refined[1][1] = ty
+            applied = True
+
+    if borders.bottom_y is not None:
+        by = borders.bottom_y + _BORDER_OFFSET_PX
+        if refined[2][1] > by:
+            refined[2][1] = by
+            applied = True
+        if refined[3][1] > by:
+            refined[3][1] = by
+            applied = True
+
+    refined[:, 0] = np.clip(refined[:, 0], 0, img_w - 1)
+    refined[:, 1] = np.clip(refined[:, 1], 0, img_h - 1)
+
+    return refined, applied
 
 
 class PageDetectStage(BaseStage):
@@ -78,16 +326,46 @@ class PageDetectStage(BaseStage):
             method = "full_image"
 
         quad = order_corners(quad)
+
+        # Border-based refinement: clip quad to detected page borders
+        border_meta = None
+        if cfg.page_detect_border_refinement and img.ndim == 3:
+            borders = _detect_page_borders(img, cfg)
+            quad, border_applied = _refine_quad_with_borders(
+                quad, borders, h, w,
+                cfg.page_detect_border_confidence_threshold,
+            )
+            border_meta = {
+                "left_x": borders.left_x,
+                "right_x": borders.right_x,
+                "top_y": borders.top_y,
+                "bottom_y": borders.bottom_y,
+                "confidence": round(borders.confidence, 3),
+                "applied": border_applied,
+            }
+            if border_applied:
+                logger.info(
+                    "Border refinement applied (confidence=%.2f, "
+                    "left=%s, right=%s, top=%s, bottom=%s)",
+                    borders.confidence,
+                    f"{borders.left_x:.0f}" if borders.left_x else "n/a",
+                    f"{borders.right_x:.0f}" if borders.right_x else "n/a",
+                    f"{borders.top_y:.0f}" if borders.top_y else "n/a",
+                    f"{borders.bottom_y:.0f}" if borders.bottom_y else "n/a",
+                )
+
         quad = _expand_quad(quad, h, w, cfg.page_detect_expand_frac)
 
         page_type = _classify_page_type(img, quad, cfg)
 
-        meta = {
+        meta: dict = {
             "stage": "page_detect",
             "method": method,
             "page_type": page_type,
             "quad_corners": quad.tolist(),
         }
+        if border_meta is not None:
+            meta["border_refinement"] = border_meta
 
         logger.info(
             "Page detected: method=%s type=%s quad_area=%.0f%%",

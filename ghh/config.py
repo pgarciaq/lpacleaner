@@ -101,6 +101,8 @@ class Config:
     page_detect_min_area_frac: float = 0.30
     page_detect_padding: int = 10
     page_detect_expand_frac: float = 0.05
+    page_detect_border_refinement: bool = True
+    page_detect_border_confidence_threshold: float = 0.5
 
     # Content area detection (Stage 6)
     content_detect_inset_fallback: float = 0.05
@@ -315,6 +317,14 @@ class Config:
         _map_if_present(kwargs, page_detect, "min_area_frac", "page_detect_min_area_frac")
         _map_if_present(kwargs, page_detect, "padding", "page_detect_padding")
         _map_if_present(kwargs, page_detect, "expand_frac", "page_detect_expand_frac")
+        _map_if_present(
+            kwargs, page_detect, "border_refinement",
+            "page_detect_border_refinement",
+        )
+        _map_if_present(
+            kwargs, page_detect, "border_confidence_threshold",
+            "page_detect_border_confidence_threshold",
+        )
 
         # [content_area] section
         content = toml_data.get("content_area", {})

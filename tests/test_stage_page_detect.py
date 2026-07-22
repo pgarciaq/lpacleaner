@@ -525,3 +525,385 @@ class TestPageDetectStageRun:
         assert out_img.resolve() == (input_dir / "IMG_0001.png").resolve()
         sidecar = tmp_path / "04_page_detected" / "IMG_0001.json"
         assert sidecar.exists(), "Sidecar should still be written"
+
+
+# ---------------------------------------------------------------------------
+# Helpers for border detection tests
+# ---------------------------------------------------------------------------
+
+def _make_page_with_red_borders(
+    width: int = 600,
+    height: int = 800,
+    border: int = 80,
+    line_thickness: int = 3,
+    red_bgr: tuple[int, int, int] = (0, 0, 200),
+    parchment_bgr: tuple[int, int, int] = (210, 215, 225),
+    bg_bgr: tuple[int, int, int] = (40, 30, 25),
+    draw_horizontal: bool = True,
+) -> np.ndarray:
+    """Create a synthetic photo of a page with red border lines.
+
+    Returns a BGR image of size (height + 2*border, width + 2*border)
+    with a parchment rectangle surrounded by dark background and red
+    border lines inside the parchment area.
+    """
+    out_h = height + 2 * border
+    out_w = width + 2 * border
+    canvas = np.full((out_h, out_w, 3), bg_bgr, dtype=np.uint8)
+
+    # Parchment area
+    canvas[border:border + height, border:border + width] = parchment_bgr
+
+    # Red vertical border lines (inside the parchment, near left/right edges)
+    inset = 10
+    lx = border + inset
+    rx = border + width - inset
+    cv2.line(canvas, (lx, border), (lx, border + height), red_bgr, line_thickness)
+    cv2.line(canvas, (rx, border), (rx, border + height), red_bgr, line_thickness)
+
+    if draw_horizontal:
+        ty = border + inset
+        by = border + height - inset
+        cv2.line(canvas, (border, ty), (border + width, ty), red_bgr, line_thickness)
+        cv2.line(canvas, (border, by), (border + width, by), red_bgr, line_thickness)
+
+    return canvas
+
+
+def _make_page_with_fore_edge(
+    width: int = 600,
+    height: int = 800,
+    border: int = 80,
+    fore_edge_width: int = 60,
+) -> np.ndarray:
+    """Page with red borders plus a bright fore-edge strip on the right."""
+    img = _make_page_with_red_borders(width, height, border)
+    parchment_color = (210, 215, 225)
+    # Add a bright fore-edge strip to the right of the page
+    fe_x = border + width
+    fe_w = min(fore_edge_width, img.shape[1] - fe_x)
+    if fe_w > 0:
+        img[border:border + height, fe_x:fe_x + fe_w] = parchment_color
+    return img
+
+
+# ---------------------------------------------------------------------------
+# TestBorderDetection
+# ---------------------------------------------------------------------------
+
+class TestBorderDetection:
+    """Test red page border line detection (#70)."""
+
+    def test_detects_red_vertical_lines(self):
+        """Should detect left and right vertical red borders."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        img = _make_page_with_red_borders()
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.left_x is not None, "Should detect left border"
+        assert borders.right_x is not None, "Should detect right border"
+        assert borders.confidence >= 0.5
+
+    def test_border_positions_are_reasonable(self):
+        """Detected border positions should be near the actual red lines."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        border = 80
+        width = 600
+        inset = 10
+        expected_left = border + inset
+        expected_right = border + width - inset
+
+        img = _make_page_with_red_borders(width=width, border=border)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.left_x is not None
+        assert borders.right_x is not None
+        assert abs(borders.left_x - expected_left) < 15
+        assert abs(borders.right_x - expected_right) < 15
+
+    def test_detects_horizontal_borders(self):
+        """Should detect top and bottom horizontal red borders."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        img = _make_page_with_red_borders(draw_horizontal=True)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.top_y is not None or borders.bottom_y is not None, \
+            "Should detect at least one horizontal border"
+
+    def test_no_borders_returns_low_confidence(self):
+        """Image without red lines should return low confidence."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        # Plain parchment page with black text lines (no red)
+        page = np.full((400, 600, 3), (210, 215, 225), dtype=np.uint8)
+        for y in range(50, 380, 40):
+            cv2.line(page, (30, y), (570, y), (0, 0, 0), 1)
+        photo = make_page_on_background(page, border=80)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(photo, cfg)
+
+        assert borders.confidence < 0.5
+
+    def test_ignores_red_initials(self):
+        """Red decorative elements (short, not near edges) should not
+        be detected as page borders."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        # Image with a red rectangle in the middle (simulating an initial)
+        # but no border lines
+        img = np.full((800, 600, 3), (210, 215, 225), dtype=np.uint8)
+        cv2.rectangle(img, (200, 300), (280, 400), (0, 0, 200), -1)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.left_x is None
+        assert borders.right_x is None
+        assert borders.confidence < 0.5
+
+    def test_partial_borders_left_only(self):
+        """If only the left border line is present, should detect it."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        border = 80
+        width = 600
+        height = 800
+        img = np.full((height + 2 * border, width + 2 * border, 3),
+                       (40, 30, 25), dtype=np.uint8)
+        parchment = (210, 215, 225)
+        img[border:border + height, border:border + width] = parchment
+        # Only left border line
+        lx = border + 10
+        cv2.line(img, (lx, border), (lx, border + height), (0, 0, 200), 3)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.left_x is not None
+        assert borders.confidence > 0
+
+    def test_faded_red_lines_detected(self):
+        """Faded red (lower saturation, lower value) should still be found."""
+        from ghh.stages.page_detect import _detect_page_borders
+
+        faded_red = (80, 80, 150)
+        img = _make_page_with_red_borders(red_bgr=faded_red)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        borders = _detect_page_borders(img, cfg)
+
+        assert borders.left_x is not None or borders.right_x is not None
+
+
+# ---------------------------------------------------------------------------
+# TestBorderRefinement
+# ---------------------------------------------------------------------------
+
+class TestBorderRefinement:
+    """Test quad refinement using detected border lines (#71)."""
+
+    def test_clips_quad_to_borders(self):
+        """Quad extending past borders should be clipped inward."""
+        from ghh.stages.page_detect import PageBorders, _refine_quad_with_borders
+
+        quad = np.array(
+            [[10, 10], [700, 10], [700, 500], [10, 500]], dtype=np.float32,
+        )
+        borders = PageBorders(left_x=50.0, right_x=650.0, confidence=0.8)
+
+        refined, applied = _refine_quad_with_borders(quad, borders, 600, 800, 0.5)
+
+        assert applied
+        assert refined[0][0] >= 47, "TL.x should clip to left border"
+        assert refined[3][0] >= 47, "BL.x should clip to left border"
+        assert refined[1][0] <= 653, "TR.x should clip to right border"
+        assert refined[2][0] <= 653, "BR.x should clip to right border"
+
+    def test_leaves_tight_quad_unchanged(self):
+        """Quad already inside borders should not be changed."""
+        from ghh.stages.page_detect import PageBorders, _refine_quad_with_borders
+
+        quad = np.array(
+            [[60, 30], [640, 30], [640, 480], [60, 480]], dtype=np.float32,
+        )
+        borders = PageBorders(left_x=50.0, right_x=650.0, confidence=0.8)
+
+        refined, applied = _refine_quad_with_borders(quad, borders, 600, 800, 0.5)
+
+        assert not applied
+        np.testing.assert_array_equal(refined, quad)
+
+    def test_partial_border_refinement(self):
+        """Only the left border clips the left edge; right stays unchanged."""
+        from ghh.stages.page_detect import PageBorders, _refine_quad_with_borders
+
+        quad = np.array(
+            [[10, 10], [700, 10], [700, 500], [10, 500]], dtype=np.float32,
+        )
+        borders = PageBorders(left_x=50.0, right_x=None, confidence=0.8)
+
+        refined, applied = _refine_quad_with_borders(quad, borders, 600, 800, 0.5)
+
+        assert applied
+        assert refined[0][0] >= 47, "TL.x should clip to left border"
+        assert refined[1][0] == 700, "TR.x should be unchanged (no right border)"
+
+    def test_low_confidence_skips_refinement(self):
+        """Below threshold, refinement is a no-op."""
+        from ghh.stages.page_detect import PageBorders, _refine_quad_with_borders
+
+        quad = np.array(
+            [[10, 10], [700, 10], [700, 500], [10, 500]], dtype=np.float32,
+        )
+        borders = PageBorders(left_x=50.0, right_x=650.0, confidence=0.3)
+
+        refined, applied = _refine_quad_with_borders(quad, borders, 600, 800, 0.5)
+
+        assert not applied
+        np.testing.assert_array_equal(refined, quad)
+
+    def test_disabled_refinement(self):
+        """Config flag disables refinement entirely."""
+        from ghh.stages.page_detect import PageDetectStage
+
+        stage = PageDetectStage()
+        img = _make_page_with_red_borders()
+        cfg = Config(input_dir=Path("/tmp"), page_detect_border_refinement=False)
+
+        _, meta = stage.process_image(img, {}, cfg)
+
+        assert "border_refinement" not in meta
+
+    def test_refinement_metadata_present(self):
+        """When refinement runs, metadata should include border_refinement."""
+        from ghh.stages.page_detect import PageDetectStage
+
+        stage = PageDetectStage()
+        img = _make_page_with_red_borders()
+        cfg = Config(input_dir=Path("/tmp"))
+
+        _, meta = stage.process_image(img, {}, cfg)
+
+        assert "border_refinement" in meta
+        br = meta["border_refinement"]
+        assert "confidence" in br
+        assert "applied" in br
+        assert "left_x" in br
+        assert "right_x" in br
+
+    def test_clips_all_four_sides(self):
+        """When all four borders are detected, all sides should clip."""
+        from ghh.stages.page_detect import PageBorders, _refine_quad_with_borders
+
+        quad = np.array(
+            [[5, 5], [795, 5], [795, 595], [5, 595]], dtype=np.float32,
+        )
+        borders = PageBorders(
+            left_x=50.0, right_x=750.0,
+            top_y=40.0, bottom_y=560.0,
+            confidence=1.0,
+        )
+
+        refined, applied = _refine_quad_with_borders(quad, borders, 600, 800, 0.5)
+
+        assert applied
+        assert refined[0][0] >= 47, "TL.x clipped"
+        assert refined[0][1] >= 37, "TL.y clipped"
+        assert refined[2][0] <= 753, "BR.x clipped"
+        assert refined[2][1] <= 563, "BR.y clipped"
+
+
+# ---------------------------------------------------------------------------
+# TestBorderRefinementIntegration (#72)
+# ---------------------------------------------------------------------------
+
+class TestBorderRefinementIntegration:
+    """End-to-end integration tests for border-based quad refinement."""
+
+    def test_fore_edge_excluded(self):
+        """A page with a bright fore-edge strip should have it excluded."""
+        from ghh.stages.page_detect import PageDetectStage
+
+        stage = PageDetectStage()
+        img = _make_page_with_fore_edge(
+            width=600, height=800, border=80, fore_edge_width=60,
+        )
+        cfg = Config(input_dir=Path("/tmp"))
+
+        _, meta = stage.process_image(img, {}, cfg)
+
+        corners = np.array(meta["quad_corners"])
+        page_right = 80 + 600
+
+        tr_x = corners[1][0]
+        br_x = corners[2][0]
+        assert tr_x < page_right + 20, \
+            f"TR.x={tr_x} should not extend far into fore-edge (page ends at {page_right})"
+        assert br_x < page_right + 20, \
+            f"BR.x={br_x} should not extend far into fore-edge"
+
+    def test_no_regression_on_clean_page(self):
+        """A page with borders on a clean dark background shouldn't degrade."""
+        from ghh.stages.page_detect import PageDetectStage
+
+        stage = PageDetectStage()
+        img = _make_page_with_red_borders(width=600, height=800, border=80)
+        cfg = Config(input_dir=Path("/tmp"))
+
+        _, meta = stage.process_image(img, {}, cfg)
+
+        corners = np.array(meta["quad_corners"])
+        quad_area = cv2.contourArea(corners.astype(np.float32))
+        page_area = 600 * 800
+
+        assert quad_area > page_area * 0.5, \
+            f"Quad area ({quad_area}) should cover most of the page ({page_area})"
+
+    def test_refinement_applied_on_bordered_page(self):
+        """Border refinement should be applied on a page with red borders."""
+        from ghh.stages.page_detect import PageDetectStage
+
+        stage = PageDetectStage()
+        img = _make_page_with_red_borders()
+        cfg = Config(input_dir=Path("/tmp"))
+
+        _, meta = stage.process_image(img, {}, cfg)
+
+        assert "border_refinement" in meta
+        br = meta["border_refinement"]
+        assert br["confidence"] >= 0.5
+
+    def test_end_to_end_with_stage5(self):
+        """Stage 4 + Stage 5 together should produce clean output."""
+        from ghh.stages.page_detect import PageDetectStage
+        from ghh.stages.perspective import PerspectiveStage
+
+        page_detect = PageDetectStage()
+        perspective = PerspectiveStage()
+
+        img = _make_page_with_fore_edge(
+            width=600, height=800, border=80, fore_edge_width=60,
+        )
+        cfg = Config(
+            input_dir=Path("/tmp"),
+            perspective_near_rect_threshold_deg=0.0,
+            perspective_max_introduced_tilt_deg=90.0,
+        )
+
+        _, s4_meta = page_detect.process_image(img, {}, cfg)
+        result, s5_meta = perspective.process_image(img, s4_meta, cfg)
+
+        if s5_meta["method"] == "warpPerspective":
+            rh, rw = result.shape[:2]
+            assert rw < img.shape[1], \
+                "Output should be narrower than input (fore-edge excluded)"
