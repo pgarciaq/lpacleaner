@@ -1,9 +1,7 @@
 """Stage 5: Perspective correction.
 
 Uses the quad corners detected by Stage 4 to map the page to a
-rectangle via ``cv2.warpPerspective``.  This is where the actual
-crop happens -- Stage 4 only detects the quad and passes the full
-image through.
+rectangle via ``cv2.warpPerspective``.
 
 Target rectangle dimensions use the *maximum* of opposite edge pairs
 so that no content is lost from the longer edge::
@@ -11,13 +9,8 @@ so that no content is lost from the longer edge::
     width  = max(dist(TL,TR), dist(BL,BR))
     height = max(dist(TL,BL), dist(TR,BR))
 
-The output canvas is padded by ``perspective_output_padding_frac``
-(default 2%) on each side so that content near the quad edges is
-preserved rather than clipped.
-
 Out-of-bounds pixels are filled with the estimated page background
-color (median of border pixels), not black.  This prevents downstream
-stages (enhance, normalize) from being confused by black corners.
+color (median of border pixels), not black.
 
 Three safety checks prevent the warp from making things worse:
 
@@ -132,20 +125,10 @@ class PerspectiveStage(BaseStage):
                 max_angle_deviation=round(max_angle_dev, 2),
             )
 
-        # --- Build the padded output canvas ---
-        pad_frac = cfg.perspective_output_padding_frac
-        pad_x = int(width * pad_frac)
-        pad_y = int(height * pad_frac)
-        canvas_w = width + 2 * pad_x
-        canvas_h = height + 2 * pad_y
-
+        # --- Map quad to tight rectangle ---
         dst = np.array(
-            [
-                [pad_x, pad_y],
-                [pad_x + width - 1, pad_y],
-                [pad_x + width - 1, pad_y + height - 1],
-                [pad_x, pad_y + height - 1],
-            ],
+            [[0, 0], [width - 1, 0],
+             [width - 1, height - 1], [0, height - 1]],
             dtype=np.float32,
         )
 
@@ -176,7 +159,7 @@ class PerspectiveStage(BaseStage):
         bg_color = estimate_background(img)
 
         rectified = cv2.warpPerspective(
-            img, M, (canvas_w, canvas_h),
+            img, M, (width, height),
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=bg_color,
@@ -186,25 +169,22 @@ class PerspectiveStage(BaseStage):
             "stage": "perspective",
             "method": "warpPerspective",
             "src_quad": quad.tolist(),
-            "dst_size": [canvas_w, canvas_h],
-            "content_rect": [pad_x, pad_y, width, height],
+            "dst_size": [width, height],
             "background_color": list(bg_color),
             "boundary_corners": boundary_count,
             "skew_degrees": round(skew, 2),
             "crop_fraction": round(crop, 3),
             "max_angle_deviation": round(max_angle_dev, 2),
             "homography_tilt": round(introduced_tilt, 2),
-            "output_padding_px": [pad_x, pad_y],
         }
         if "page_type" in metadata:
             meta["page_type"] = metadata["page_type"]
 
         logger.info(
-            "Perspective correction: %dx%d -> %dx%d (pad=%d,%d, "
-            "boundary=%d, skew=%.1f°, angle_dev=%.1f°, tilt=%.2f°)",
-            img.shape[1], img.shape[0], canvas_w, canvas_h,
-            pad_x, pad_y, boundary_count, skew, max_angle_dev,
-            introduced_tilt,
+            "Perspective correction: %dx%d -> %dx%d "
+            "(boundary=%d, skew=%.1f°, angle_dev=%.1f°, tilt=%.2f°)",
+            w, h, width, height,
+            boundary_count, skew, max_angle_dev, introduced_tilt,
         )
         return rectified, meta
 

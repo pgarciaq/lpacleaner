@@ -100,7 +100,7 @@ class Config:
     page_detect_epsilon: float = 0.02
     page_detect_min_area_frac: float = 0.30
     page_detect_padding: int = 10
-    page_detect_expand_frac: float = 0.03
+    page_detect_expand_frac: float = 0.05
 
     # Content area detection (Stage 6)
     content_detect_inset_fallback: float = 0.05
@@ -110,7 +110,6 @@ class Config:
     # Perspective validation (Stage 5)
     perspective_max_skew_deg: float = 5.0
     perspective_max_crop_frac: float = 0.30
-    perspective_output_padding_frac: float = 0.02
     perspective_near_rect_threshold_deg: float = 2.0
     perspective_max_introduced_tilt_deg: float = 1.5
 
@@ -327,10 +326,6 @@ class Config:
         perspective = toml_data.get("perspective", {})
         _map_if_present(kwargs, perspective, "max_skew_deg", "perspective_max_skew_deg")
         _map_if_present(kwargs, perspective, "max_crop_frac", "perspective_max_crop_frac")
-        _map_if_present(
-            kwargs, perspective, "output_padding_frac",
-            "perspective_output_padding_frac",
-        )
         _map_if_present(
             kwargs, perspective, "near_rect_threshold_deg",
             "perspective_near_rect_threshold_deg",

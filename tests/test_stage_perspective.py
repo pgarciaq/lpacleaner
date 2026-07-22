@@ -2,8 +2,8 @@
 
 Covers the BaseStage contract, quad-to-rectangle warping, background
 fill, pass-through on missing/degenerate quads, sidecar propagation
-from Stage 4, near-rectangular passthrough, output padding, tilt
-rejection, and integration tests.
+from Stage 4, near-rectangular passthrough, tilt rejection, and
+integration tests.
 """
 
 from __future__ import annotations
@@ -27,15 +27,14 @@ from tests.conftest import (
 # ---------------------------------------------------------------------------
 
 def _warp_cfg(**overrides) -> Config:
-    """Config that disables near-rect check and padding so warp always applies.
+    """Config that disables near-rect check so warp always applies.
 
     Existing tests that need ``method == "warpPerspective"`` use this to avoid
-    tripping the new near-rectangular passthrough and padding dimension changes.
+    tripping the near-rectangular passthrough.
     """
     defaults = {
         "input_dir": Path("/tmp"),
         "perspective_near_rect_threshold_deg": 0.0,
-        "perspective_output_padding_frac": 0.0,
         "perspective_max_introduced_tilt_deg": 90.0,
     }
     defaults.update(overrides)
@@ -568,6 +567,7 @@ class TestSidecarPropagation:
 
         page = make_music_page(width=600, height=400)
         photo = make_page_on_background(page, border=30)
+        ph, pw = photo.shape[:2]
 
         quad = [[30, 30], [630, 30], [630, 430], [30, 430]]
         s4_meta = {"stage": "page_detect", "quad_corners": quad, "page_type": "music"}
@@ -637,7 +637,7 @@ class TestNearRectangularPassthrough:
 
         stage = PerspectiveStage()
         img = np.full((600, 800, 3), 128, dtype=np.uint8)
-        cfg = Config(input_dir=Path("/tmp"), perspective_output_padding_frac=0.0,
+        cfg = Config(input_dir=Path("/tmp"),
                      perspective_max_introduced_tilt_deg=90.0)
 
         quad = [[50, 30], [750, 10], [770, 570], [30, 590]]
@@ -672,37 +672,14 @@ class TestNearRectangularPassthrough:
 
 
 # ---------------------------------------------------------------------------
-# TestOutputPadding
+# TestTightOutput
 # ---------------------------------------------------------------------------
 
-class TestOutputPadding:
-    """Test padded output canvas (#65)."""
+class TestTightOutput:
+    """Test that output matches quad dimensions exactly (0% padding)."""
 
-    def test_padding_adds_border(self):
-        """With padding > 0, output should be larger than quad content."""
-        from ghh.stages.perspective import PerspectiveStage
-
-        stage = PerspectiveStage()
-        img = np.full((600, 800, 3), 128, dtype=np.uint8)
-        cfg = Config(
-            input_dir=Path("/tmp"),
-            perspective_near_rect_threshold_deg=0.0,
-            perspective_output_padding_frac=0.05,
-            perspective_max_introduced_tilt_deg=90.0,
-        )
-
-        quad = [[20, 20], [780, 20], [780, 580], [20, 580]]
-        result, meta = stage.process_image(img, {"quad_corners": quad}, cfg)
-
-        assert meta["method"] == "warpPerspective"
-        content_w, content_h = 760, 560
-        assert result.shape[1] > content_w
-        assert result.shape[0] > content_h
-        assert "content_rect" in meta
-        assert "output_padding_px" in meta
-
-    def test_zero_padding_gives_exact_dimensions(self):
-        """With padding=0, output should match quad content dimensions."""
+    def test_output_matches_quad_exactly(self):
+        """Output should be exactly the quad content dimensions."""
         from ghh.stages.perspective import PerspectiveStage
 
         stage = PerspectiveStage()
@@ -713,6 +690,22 @@ class TestOutputPadding:
         quad = [[30, 30], [630, 30], [630, 430], [30, 430]]
         result, meta = stage.process_image(photo, {"quad_corners": quad}, cfg)
 
+        assert result.shape[1] == 600
+        assert result.shape[0] == 400
+
+    def test_no_dark_border_in_output(self):
+        """The dark background should not appear in the output."""
+        from ghh.stages.perspective import PerspectiveStage
+
+        stage = PerspectiveStage()
+        page = make_music_page(width=600, height=400)
+        photo = make_page_on_background(page, border=30)
+        cfg = _warp_cfg()
+
+        quad = [[30, 30], [630, 30], [630, 430], [30, 430]]
+        result, meta = stage.process_image(photo, {"quad_corners": quad}, cfg)
+
+        assert meta["method"] == "warpPerspective"
         assert result.shape[1] == 600
         assert result.shape[0] == 400
 
@@ -749,7 +742,6 @@ class TestTiltRejection:
         cfg = Config(
             input_dir=Path("/tmp"),
             perspective_near_rect_threshold_deg=0.0,
-            perspective_output_padding_frac=0.0,
             perspective_max_introduced_tilt_deg=0.5,
         )
 
@@ -767,7 +759,6 @@ class TestTiltRejection:
         cfg = Config(
             input_dir=Path("/tmp"),
             perspective_near_rect_threshold_deg=0.0,
-            perspective_output_padding_frac=0.0,
             perspective_max_introduced_tilt_deg=90.0,
         )
 
