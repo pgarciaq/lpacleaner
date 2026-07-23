@@ -173,14 +173,12 @@ the full page including margins. Use `--skip-content-area`.
 
 Isolates music staff regions from mixed-content pages:
 
-- Detects and extracts music staff areas, removing illustrations,
-  decorative elements, and marginal annotations
-- Produces cropped images containing only musical notation
-- Pages without music pass through unchanged
+- Detects horizontal staff line clusters using morphological operations
+- Filters by minimum width (30% of image) to avoid false positives
+- Crops to the bounding box of all staff regions with a 3% vertical margin
+- Pages without detected staves pass through unchanged (symlinked)
 
-**Status:** Not yet implemented.
-
-**Key configuration:** `[staff_extract]` section (TBD).
+**Skip when:** You want to keep the full content area for OMR.
 
 ### Stage 8: Deskew
 
