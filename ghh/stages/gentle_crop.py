@@ -28,6 +28,7 @@ class GentleCropStage(BaseStage):
     number = 5
     checkpoint_name = "05_gentle_crop"
     error_class = "skippable"
+    config_keys = ("gentle_crop_margin_frac",)
 
     def process_image(
         self,

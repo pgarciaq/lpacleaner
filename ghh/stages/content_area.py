@@ -52,6 +52,12 @@ class ContentAreaStage(BaseStage):
     number = 6
     checkpoint_name = "06_content"
     error_class = "skippable"
+    config_keys = (
+        "has_border_frame",
+        "content_detect_inset_fallback",
+        "content_feather_sigma",
+        "content_margin_padding",
+    )
 
     def process_image(
         self,

@@ -14,11 +14,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import threading
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -156,6 +155,7 @@ class BaseStage(ABC):
     number: int              # e.g., 0
     checkpoint_name: str     # e.g., "00_preprocessed"
     error_class: str         # "skippable", "critical", "fatal"
+    config_keys: tuple[str, ...] = ()  # config fields this stage depends on
     writes_image: bool = True   # False → symlink to source image (saves disk)
     symlink_unchanged: bool = False  # True → symlink when is_unchanged() returns True
 
@@ -170,6 +170,18 @@ class BaseStage(ABC):
 
         Raise an exception to trigger the error_class policy.
         """
+
+    def config_hash(self, cfg: Config) -> str:
+        """Hash the config fields this stage depends on.
+
+        Used by the orchestrator to detect config changes and
+        invalidate cached results.
+        """
+        import hashlib
+        parts = []
+        for key in sorted(self.config_keys):
+            parts.append(f"{key}={getattr(cfg, key, None)!r}")
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
     def should_skip(self, cfg: Config) -> bool:
         """Whether this stage should be skipped entirely (profile/flags)."""

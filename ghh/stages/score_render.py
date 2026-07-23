@@ -47,6 +47,7 @@ class ScoreRenderStage(BaseStage):
     number = 14
     checkpoint_name = "14_score_render"
     error_class = "skippable"
+    config_keys = ("book_only",)
     writes_image = True
 
     def process_image(

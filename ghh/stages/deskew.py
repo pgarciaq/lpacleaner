@@ -38,6 +38,17 @@ class DeskewStage(BaseStage):
     number = 8
     checkpoint_name = "08_deskewed"
     error_class = "skippable"
+    config_keys = (
+        "deskew_max_angle",
+        "deskew_angle_step",
+        "deskew_skip_threshold",
+        "staff_color_hue",
+        "staff_color_range",
+        "staff_saturation_min",
+        "staff_value_min",
+        "channel_diff_rg",
+        "channel_diff_rb",
+    )
 
     def process_image(
         self,

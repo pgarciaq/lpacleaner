@@ -53,6 +53,7 @@ class OrientationStage(BaseStage):
     number = 2
     checkpoint_name = "02_oriented"
     error_class = "critical"
+    config_keys = ("staff_color_hue", "staff_color_range")
     symlink_unchanged = True
 
     def is_unchanged(self, metadata: dict) -> bool:

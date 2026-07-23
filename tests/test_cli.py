@@ -114,7 +114,7 @@ class TestCLIRun:
         ])
 
         assert result.exit_code == 0, result.output
-        assert "Done." in result.output
+        assert "Pipeline Summary" in result.output
         assert (output_dir / "00_preprocessed").is_dir()
         assert (output_dir / "01_stitched").is_dir()
         assert (output_dir / "02_oriented").is_dir()

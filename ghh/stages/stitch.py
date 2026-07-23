@@ -34,6 +34,7 @@ class StitchStage(BaseStage):
     number = 1
     checkpoint_name = "01_stitched"
     error_class = "skippable"
+    config_keys = ("exclude_images", "include_covers")
 
     def process_image(self, img, metadata, cfg):
         # Not used -- run() handles batch processing directly

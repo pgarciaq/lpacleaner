@@ -56,6 +56,14 @@ class PDFAssemblyStage(BaseStage):
     number = 15
     checkpoint_name = "15_pdf"
     error_class = "fatal"
+    config_keys = (
+        "pdf_compression",
+        "pdf_jpeg_quality",
+        "pdf_dpi",
+        "exclude_images",
+        "scores_only",
+        "book_only",
+    )
 
     def process_image(
         self,

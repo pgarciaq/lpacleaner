@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import cv2
 import numpy as np
-import pytest
 
 from ghh.config import Config
 from ghh.pipeline import BaseStage, PipelineState, StageResult
-
 
 # ---------------------------------------------------------------------------
 # Concrete test stage (minimal implementation for testing the contract)
@@ -24,6 +21,7 @@ class InvertStage(BaseStage):
     number = 99
     checkpoint_name = "99_inverted"
     error_class = "skippable"
+    config_keys = ("staff_color_hue", "staff_color_range")
 
     def process_image(self, img, metadata, cfg):
         return cv2.bitwise_not(img), {**metadata, "inverted": True}
@@ -231,3 +229,190 @@ class TestBaseStage:
 
         stage = EnhanceStage()
         assert stage.should_skip(cfg) is True
+
+
+# ---------------------------------------------------------------------------
+# TestConfigHash
+# ---------------------------------------------------------------------------
+
+class TestConfigHash:
+    """Tests for BaseStage.config_hash() -- deterministic hashing of
+    config fields for cache invalidation."""
+
+    def test_deterministic(self, tmp_path):
+        cfg = Config(input_dir=tmp_path, staff_color_hue=5, staff_color_range=15)
+        stage = InvertStage()
+        assert stage.config_hash(cfg) == stage.config_hash(cfg)
+
+    def test_changes_with_config_value(self, tmp_path):
+        cfg_a = Config(input_dir=tmp_path, staff_color_hue=5)
+        cfg_b = Config(input_dir=tmp_path, staff_color_hue=10)
+        stage = InvertStage()
+        assert stage.config_hash(cfg_a) != stage.config_hash(cfg_b)
+
+    def test_empty_config_keys_gives_stable_hash(self, tmp_path):
+        """Stages with no config_keys always produce the same hash."""
+        cfg_a = Config(input_dir=tmp_path, staff_color_hue=5)
+        cfg_b = Config(input_dir=tmp_path, staff_color_hue=99)
+
+        class NoKeysStage(BaseStage):
+            name = "nokeys"
+            number = 90
+            checkpoint_name = "90_nokeys"
+            error_class = "skippable"
+            config_keys = ()
+            def process_image(self, img, metadata, cfg):
+                return img, metadata
+
+        stage = NoKeysStage()
+        assert stage.config_hash(cfg_a) == stage.config_hash(cfg_b)
+
+    def test_hash_length(self, tmp_path):
+        cfg = Config(input_dir=tmp_path)
+        stage = InvertStage()
+        h = stage.config_hash(cfg)
+        assert len(h) == 16
+        assert all(c in "0123456789abcdef" for c in h)
+
+    def test_all_implemented_stages_have_config_keys(self):
+        """Every stage class must declare config_keys (even if empty)."""
+        from ghh.stages import STAGE_CLASSES
+        for cls in STAGE_CLASSES:
+            assert hasattr(cls, "config_keys"), (
+                f"{cls.__name__} missing config_keys"
+            )
+            assert isinstance(cls.config_keys, tuple), (
+                f"{cls.__name__}.config_keys must be a tuple"
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestInvalidateFrom
+# ---------------------------------------------------------------------------
+
+class TestInvalidateFrom:
+    """Tests for _invalidate_from() -- downstream cascade invalidation."""
+
+    def test_clears_state_and_checkpoint_dir(self, tmp_path):
+        from ghh.cli import _invalidate_from
+
+        state = PipelineState(tmp_path)
+        state.set_stage_hash("invert", "old_hash")
+        state.mark_image_done("99_inverted", "IMG_0001")
+
+        ckpt = tmp_path / "99_inverted"
+        ckpt.mkdir()
+        (ckpt / "IMG_0001.png").write_bytes(b"fake")
+
+        stage = InvertStage()
+        _invalidate_from([stage], state, tmp_path)
+
+        assert state.get_stage_hash("invert") is None
+        assert not state.is_image_done("99_inverted", "IMG_0001")
+        assert not ckpt.exists()
+
+    def test_cascades_to_multiple_stages(self, tmp_path):
+        from ghh.cli import _invalidate_from
+
+        state = PipelineState(tmp_path)
+
+        class StageA(BaseStage):
+            name = "a"
+            number = 80
+            checkpoint_name = "80_a"
+            error_class = "skippable"
+            def process_image(self, img, metadata, cfg):
+                return img, metadata
+
+        class StageB(BaseStage):
+            name = "b"
+            number = 81
+            checkpoint_name = "81_b"
+            error_class = "skippable"
+            def process_image(self, img, metadata, cfg):
+                return img, metadata
+
+        state.set_stage_hash("a", "ha")
+        state.set_stage_hash("b", "hb")
+        (tmp_path / "80_a").mkdir()
+        (tmp_path / "81_b").mkdir()
+
+        _invalidate_from([StageA(), StageB()], state, tmp_path)
+
+        assert state.get_stage_hash("a") is None
+        assert state.get_stage_hash("b") is None
+        assert not (tmp_path / "80_a").exists()
+        assert not (tmp_path / "81_b").exists()
+
+    def test_no_error_when_no_checkpoint_dir(self, tmp_path):
+        """Invalidating a stage with no checkpoint dir should not raise."""
+        from ghh.cli import _invalidate_from
+
+        state = PipelineState(tmp_path)
+        stage = InvertStage()
+        _invalidate_from([stage], state, tmp_path)  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# TestCheckDiskSpace
+# ---------------------------------------------------------------------------
+
+class TestCheckDiskSpace:
+    """Tests for _check_disk_space() -- warns when disk is tight."""
+
+    def test_no_crash_on_empty_input(self, tmp_path):
+        from ghh.cli import _check_disk_space
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        _check_disk_space(output_dir, input_dir, quiet=True)
+
+    def test_no_crash_on_normal_input(self, tmp_path):
+        from ghh.cli import _check_disk_space
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        cv2.imwrite(str(input_dir / "test.png"), img)
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        _check_disk_space(output_dir, input_dir, quiet=False)
+
+
+# ---------------------------------------------------------------------------
+# TestPrintEndReport
+# ---------------------------------------------------------------------------
+
+class TestPrintEndReport:
+    """Tests for _print_end_report() -- per-stage summary."""
+
+    def test_prints_without_error(self, tmp_path, capsys):
+        from ghh.cli import _print_end_report
+
+        state = PipelineState(tmp_path)
+        state.record_result(StageResult("orientation", processed=10, skipped=0, failed=0))
+        state.record_result(StageResult("deskew", processed=8, skipped=2, failed=0))
+
+        _print_end_report(state, total_p=18, total_f=0)
+
+        captured = capsys.readouterr()
+        assert "Pipeline Summary" in captured.out
+        assert "orientation" in captured.out
+        assert "deskew" in captured.out
+        assert "completed" in captured.out
+
+    def test_shows_errors_status(self, tmp_path, capsys):
+        from ghh.cli import _print_end_report
+
+        state = PipelineState(tmp_path)
+        state.record_result(StageResult("preprocess", processed=5, failed=2))
+
+        _print_end_report(state, total_p=5, total_f=2)
+
+        captured = capsys.readouterr()
+        assert "completed with errors" in captured.out

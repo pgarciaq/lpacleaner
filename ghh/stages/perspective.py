@@ -51,6 +51,12 @@ class PerspectiveStage(BaseStage):
     number = 9
     checkpoint_name = "09_perspective"
     error_class = "skippable"
+    config_keys = (
+        "perspective_max_skew_deg",
+        "perspective_max_crop_frac",
+        "perspective_near_rect_threshold_deg",
+        "perspective_max_introduced_tilt_deg",
+    )
     symlink_unchanged = True
 
     def is_unchanged(self, metadata: dict) -> bool:

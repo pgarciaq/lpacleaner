@@ -23,6 +23,7 @@ class PreprocessStage(BaseStage):
     number = 0
     checkpoint_name = "00_preprocessed"
     error_class = "skippable"
+    config_keys = ("fingers_detected",)
 
     def process_image(
         self,

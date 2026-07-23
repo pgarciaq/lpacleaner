@@ -23,6 +23,7 @@ class StaffExtractStage(BaseStage):
     number = 7
     checkpoint_name = "07_staff_extract"
     error_class = "skippable"
+    config_keys = ()
     symlink_unchanged = True
 
     def process_image(

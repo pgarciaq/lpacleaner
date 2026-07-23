@@ -294,6 +294,16 @@ class PageDetectStage(BaseStage):
     number = 4
     checkpoint_name = "04_page_detected"
     error_class = "skippable"
+    config_keys = (
+        "minimize_diskspace",
+        "page_detect_border_refinement",
+        "page_detect_border_confidence_threshold",
+        "page_detect_expand_frac",
+        "page_detect_method",
+        "page_detect_morph_kernel",
+        "page_detect_min_area_frac",
+        "page_detect_epsilon",
+    )
 
     def run(self, input_dir, output_dir, cfg, state, progress_callback=None,
             max_workers=1):

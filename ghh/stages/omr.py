@@ -44,6 +44,7 @@ class OmrStage(BaseStage):
     number = 13
     checkpoint_name = "13_omr"
     error_class = "skippable"
+    config_keys = ("omr_model_dir", "omr_device", "omr_beam_width")
     writes_image = False
 
     def process_image(

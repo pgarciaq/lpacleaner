@@ -139,6 +139,8 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
 
     cfg = Config.from_toml(input_path, toml_path=config_path, overrides=overrides)
 
+    _check_disk_space(output_path, input_path, quiet)
+
     # If user specified explicit stages, use flat (non-branched) execution
     if stage_spec is not None:
         stage_numbers = parse_stage_spec(stage_spec)
@@ -157,7 +159,7 @@ def run(input_dir, output_dir, config_path, stage_spec, profile, preview,
             book_only=book_only, scores_only=scores_only,
         )
 
-    click.echo(f"Done. {total_p} images processed, {total_f} failures.")
+    _print_end_report(state, total_p, total_f)
 
     try:
         from ghh.compare import write_compare_html
@@ -180,11 +182,17 @@ def _run_stage_list(
     quiet: bool,
     branch_dir: Path | None = None,
 ) -> tuple[int, int]:
-    """Run a flat list of stages sequentially (legacy / explicit --stages mode).
+    """Run a flat list of stages sequentially.
 
     When *branch_dir* is set, checkpoint directories are created under
     that subdirectory (e.g. ``output/book/``) and previous-checkpoint
     lookup starts there before falling back to the common output root.
+
+    Config-hash invalidation: before each stage, the orchestrator
+    computes a hash of the config fields the stage depends on (via
+    ``stage.config_keys``).  If the hash differs from the stored one,
+    the stage and all downstream stages in the list are invalidated --
+    their cached results are cleared so they re-run from scratch.
     """
     import click
     from tqdm import tqdm
@@ -195,10 +203,24 @@ def _run_stage_list(
     total_processed = 0
     total_failed = 0
 
-    for stage in stages:
+    invalidated_from: int | None = None
+
+    for idx, stage in enumerate(stages):
         if stage.should_skip(cfg):
             click.echo(f"  Skipping stage {stage.number} ({stage.name})")
             continue
+
+        # --- Config-hash invalidation ---
+        current_hash = stage.config_hash(cfg)
+        if state.is_stage_invalidated(stage.name, current_hash):
+            if invalidated_from is None:
+                invalidated_from = idx
+                logger.info(
+                    "Config changed for stage %s (%s), invalidating "
+                    "this and all downstream stages",
+                    stage.number, stage.name,
+                )
+            _invalidate_from(stages[idx:], state, effective_output)
 
         if stage.number == 0:
             stage_input = input_path
@@ -228,6 +250,8 @@ def _run_stage_list(
             max_workers=jobs,
         )
         bar.close()
+
+        state.set_stage_hash(stage.name, current_hash)
         state.record_result(result)
         state.save()
 
@@ -240,6 +264,29 @@ def _run_stage_list(
         )
 
     return total_processed, total_failed
+
+
+def _invalidate_from(
+    stages_to_clear: list,
+    state,
+    output_dir: Path,
+) -> None:
+    """Invalidate pipeline state and checkpoint dirs for a list of stages.
+
+    Called when a config change is detected: clears all downstream
+    ``done`` markers and checkpoint directories so stages re-run.
+    """
+    import shutil
+
+    for stage in stages_to_clear:
+        logger.debug("Invalidating cached results for stage %s", stage.name)
+        state.invalidate_stage(stage.name)
+        # Images are tracked by checkpoint_name, not stage name
+        state._done.pop(stage.checkpoint_name, None)
+        ckpt = output_dir / stage.checkpoint_name
+        if ckpt.is_dir():
+            shutil.rmtree(ckpt)
+            logger.debug("Removed checkpoint dir %s", ckpt)
 
 
 def _run_forked_pipeline(
@@ -321,6 +368,82 @@ def _run_forked_pipeline(
         total_f += f
 
     return total_p, total_f
+
+
+def _check_disk_space(
+    output_path: Path,
+    input_path: Path,
+    quiet: bool,
+) -> None:
+    """Warn if available disk space looks tight.
+
+    Heuristic: each pipeline stage may produce output roughly equal to
+    the input size.  We warn if free space is less than 3x the input
+    directory size.
+    """
+    import shutil
+
+    import click
+
+    try:
+        usage = shutil.disk_usage(output_path)
+    except OSError:
+        return
+
+    input_size = sum(
+        f.stat().st_size
+        for f in input_path.rglob("*")
+        if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".tiff", ".tif")
+    )
+    if input_size == 0:
+        return
+
+    headroom_needed = input_size * 3
+    if usage.free < headroom_needed:
+        free_gb = usage.free / (1024 ** 3)
+        need_gb = headroom_needed / (1024 ** 3)
+        if not quiet:
+            click.echo(
+                f"  Warning: only {free_gb:.1f} GB free on output volume "
+                f"(recommend at least {need_gb:.1f} GB for this input set)",
+                err=True,
+            )
+        logger.warning(
+            "Low disk space: %.1f GB free, %.1f GB recommended",
+            free_gb, need_gb,
+        )
+
+
+def _print_end_report(state, total_p: int, total_f: int) -> None:
+    """Print a detailed per-stage summary at the end of a pipeline run."""
+    import click
+
+    click.echo()
+    click.echo("═══ Pipeline Summary ═══")
+
+    results = []
+    for name in sorted(state._results, key=lambda n: state._results[n].stage_name):
+        results.append(state._results[name])
+
+    if results:
+        click.echo(
+            f"  {'Stage':<20s}  {'Processed':>9s}  {'Skipped':>7s}  "
+            f"{'Failed':>6s}  {'Excluded':>8s}"
+        )
+        click.echo(f"  {'─' * 20}  {'─' * 9}  {'─' * 7}  {'─' * 6}  {'─' * 8}")
+        for r in results:
+            click.echo(
+                f"  {r.stage_name:<20s}  {r.processed:>9d}  {r.skipped:>7d}  "
+                f"{r.failed:>6d}  {r.excluded:>8d}"
+            )
+        click.echo(f"  {'─' * 20}  {'─' * 9}  {'─' * 7}  {'─' * 6}  {'─' * 8}")
+
+    status = "completed" if total_f == 0 else "completed with errors"
+    click.echo(
+        f"\n  Result: {status}  "
+        f"({total_p} processed, {total_f} failures)"
+    )
+    click.echo()
 
 
 def _implemented_numbers() -> set[int]:

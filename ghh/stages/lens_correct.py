@@ -28,6 +28,7 @@ class LensCorrectStage(BaseStage):
     number = 3
     checkpoint_name = "03_lens_corrected"
     error_class = "skippable"
+    config_keys = ("lens_distortion_k1", "lens_distortion_k2")
 
     def should_skip(self, cfg: Config) -> bool:
         if super().should_skip(cfg):
