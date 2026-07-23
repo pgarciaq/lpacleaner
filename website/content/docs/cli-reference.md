@@ -33,6 +33,8 @@ producing a clean PDF from raw photographs.
 | `--stages` | string | all | Stages to run (e.g. `0,1,2` or `0-2,5,7`) |
 | `--profile` | choice | `full` | Processing profile: `full`, `geometry`, `clean`, `quick` |
 | `--preview` | integer | 0 | Process only N images (0 = all) |
+| `--book-only` | flag | | Run only the Book branch (skip Score branch) |
+| `--scores-only` | flag | | Run only the Score branch (skip Book branch) |
 | `--skip-content-area` | flag | | Skip content area detection (Stage 6) |
 | `--skip-deskew` | flag | | Skip deskewing (Stage 8) |
 | `--skip-dewarp` | flag | | Skip dewarping (Stage 10) |
@@ -45,6 +47,7 @@ producing a clean PDF from raw photographs.
 | `--binarize` | flag | | Binarize output images |
 | `--cleanup` | flag | | Delete intermediate checkpoints after success |
 | `--on-error` | choice | `skip` | Error handling: `skip`, `stop`, `force` |
+| `-j`, `--jobs` | integer | half CPU cores | Parallel workers per stage (1 = sequential) |
 | `-v`, `--verbose` | flag | | Verbose logging (DEBUG level) |
 | `-q`, `--quiet` | flag | | Quiet logging (WARNING level only) |
 
@@ -65,6 +68,12 @@ ghh run ~/photos/LPA-1 --config ~/photos/LPA-1/book.toml
 
 # Skip OCR and clean up intermediates
 ghh run ~/photos/LPA-1 --skip-ocr --cleanup
+
+# Run only the book branch (skip OMR/score processing)
+ghh run ~/photos/LPA-1 --book-only
+
+# Run with 4 parallel workers per stage
+ghh run ~/photos/LPA-1 -j 4
 
 # Run with OMR (requires chant-omr and exported model)
 ghh run ~/photos/LPA-1 --model-dir ~/models/chant-omr

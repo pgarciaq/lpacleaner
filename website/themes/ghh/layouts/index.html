@@ -249,9 +249,9 @@
       <div class="pipeline-branch branch-book">
         <div class="pipeline-branch-label">Book Branch <span class="branch-desc">(full page &rarr; PDF)</span></div>
         <div class="pipeline-stages pipeline-row">
-          <div class="stage-chip pending"><span class="stage-dot"></span> 8&ensp;Deskew</div>
+          <div class="stage-chip done"><span class="stage-dot"></span> 8&ensp;Deskew</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip pending"><span class="stage-dot"></span> 9&ensp;Perspective</div>
+          <div class="stage-chip done"><span class="stage-dot"></span> 9&ensp;Perspective</div>
           <span class="pipeline-arrow">&rarr;</span>
           <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Dewarp</div>
           <span class="pipeline-arrow">&rarr;</span>
@@ -265,11 +265,11 @@
       <div class="pipeline-branch branch-score">
         <div class="pipeline-branch-label">Score Branch <span class="branch-desc">(content area &rarr; GABC)</span></div>
         <div class="pipeline-stages pipeline-row">
-          <div class="stage-chip pending"><span class="stage-dot"></span> 6&ensp;Content Area</div>
+          <div class="stage-chip done"><span class="stage-dot"></span> 6&ensp;Content Area</div>
           <span class="pipeline-arrow">&rarr;</span>
           <div class="stage-chip not-started"><span class="stage-dot"></span> 7&ensp;Staff Extract</div>
           <span class="pipeline-arrow">&rarr;</span>
-          <div class="stage-chip pending"><span class="stage-dot"></span> 8&ensp;Deskew</div>
+          <div class="stage-chip done"><span class="stage-dot"></span> 8&ensp;Deskew</div>
           <span class="pipeline-arrow">&rarr;</span>
           <div class="stage-chip not-started"><span class="stage-dot"></span> 10&ensp;Dewarp</div>
           <span class="pipeline-arrow">&rarr;</span>
@@ -309,27 +309,25 @@
     <div class="roadmap-items">
 
       <div class="roadmap-card">
-        <span class="roadmap-badge next">Next</span>
+        <span class="roadmap-badge done">Done</span>
         <h3>Pipeline Reordering</h3>
         <p>
-          Replace Stage 5 (Perspective) with a <strong>Gentle Crop</strong> that crops
-          to the page bounding box without warping, then move Perspective to Stage 9
-          (after Deskew). This eliminates overcropping and lets geometric corrections
-          build on each other instead of fighting.
+          Stage 5 is now a <strong>Gentle Crop</strong> that crops to the page
+          bounding box without warping. Perspective correction moved to Stage 9
+          (after Deskew), eliminating overcropping and letting geometric corrections
+          build on each other. Quad corners propagate through all stages.
         </p>
       </div>
 
       <div class="roadmap-card">
-        <span class="roadmap-badge next">Next</span>
-        <h3>Forked Pipeline Architecture</h3>
+        <span class="roadmap-badge done">Done</span>
+        <h3>Forked Pipeline &amp; Orchestrator</h3>
         <p>
           The pipeline forks after Gentle Crop into two branches:
-          a <strong>Book branch</strong> (full-page processing for PDF production,
-          including Deskew &rarr; Perspective &rarr; Dewarp)
-          and a <strong>Score branch</strong> (content-area extraction for OMR,
-          skipping Perspective entirely since Content Area already produces
-          a clean crop).
-          Each branch applies its own parameters for deskew, dewarp, and enhancement.
+          a <strong>Book branch</strong> (Deskew &rarr; Perspective &rarr; Dewarp)
+          and a <strong>Score branch</strong> (Content Area &rarr; Staff Extract &rarr; OMR).
+          The orchestrator supports config-hash invalidation with downstream cascade,
+          per-stage end-of-run reports, and disk space warnings.
         </p>
       </div>
 

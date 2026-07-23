@@ -30,7 +30,13 @@ exist and whose input images haven't changed are **skipped automatically**.
 This means you can interrupt a run, fix a configuration issue, and resume
 without re-processing everything from scratch.
 
-To force a stage to re-run, delete its checkpoint directory.
+**Config-hash invalidation:** Each stage declares the configuration
+fields it depends on. When you change a setting in `book.toml` (e.g.
+`deskew.max_angle`), the orchestrator detects the change and
+automatically re-runs that stage *and all downstream stages*. No need
+to manually delete checkpoint directories.
+
+To force a stage to re-run anyway, delete its checkpoint directory.
 
 ## Running specific stages
 
@@ -159,8 +165,6 @@ margins, border frames, and decorative edges:
 **Skip when:** Pages have no border frame and you want to preserve
 the full page including margins. Use `--skip-content-area`.
 
-**Status:** In progress -- results vary depending on page layout.
-
 **Key configuration:** `[content_area]` section.
 
 ### Stage 7: Staff Extract (Score branch only)
@@ -197,9 +201,6 @@ Runs in both branches: on the full page (Book branch) and on the
 content area or staff extract output (Score branch).
 
 **Skip when:** Pages are already straight. Use `--skip-deskew`.
-
-**Status:** In progress -- works well for small angles but may
-over-correct in some cases.
 
 **Key configuration:** `[deskew]` section: `max_angle`,
 `skip_threshold`.

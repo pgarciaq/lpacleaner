@@ -58,6 +58,25 @@ Individual stages can also be skipped explicitly:
 ghh run /path/to/photos --skip-ocr --skip-normalize
 ```
 
+## Branch-specific overrides
+
+Stages that run in both branches (Deskew, Dewarp, Enhance, Normalize)
+use the same code but can have different parameters per branch. Prefix
+a section with `book.` or `score.` to override values for that branch:
+
+```toml
+[deskew]
+max_angle = 5.0          # shared default
+
+[book.deskew]
+max_angle = 3.0          # book branch: conservative
+
+[score.deskew]
+max_angle = 8.0          # score branch: more aggressive for staves
+```
+
+Any parameter not overridden inherits from the shared section.
+
 ## book.toml reference
 
 Below is a complete annotated `book.toml` with all supported sections and
@@ -199,6 +218,14 @@ Controls how ghh finds the page within each photograph.
 | `min_area_frac` | float | 0.30 | Minimum page area as fraction of image |
 | `padding` | integer | 10 | Pixel padding around detected page |
 | `expand_frac` | float | 0.03 | Outward expansion of detected quad |
+
+### [gentle_crop] -- Gentle crop (Stage 5)
+
+Controls the bounding-box crop around the detected page quad.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `margin_frac` | float | 0.03 | Expansion margin as fraction of bounding box |
 
 ### [content_area] -- Content area detection (Stage 6)
 
