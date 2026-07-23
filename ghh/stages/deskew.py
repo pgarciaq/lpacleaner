@@ -28,7 +28,7 @@ import numpy as np
 from ghh.config import Config
 from ghh.pipeline import BaseStage
 from ghh.utils.image_utils import estimate_background, trim_to_content
-from ghh.utils.line_detect import detect_dominant_angle
+from ghh.utils.line_detect import _apply_quad_mask, detect_dominant_angle
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,15 @@ class DeskewStage(BaseStage):
         metadata: dict,
         cfg: Config,
     ) -> tuple[np.ndarray, dict]:
-        small = _downscale_for_detection(img)
-        angle = detect_dominant_angle(small, cfg)
+        quad = _load_quad(metadata)
+        small, scale = _downscale_for_detection(img)
+        small_quad = quad * scale if quad is not None else None
+
+        angle = detect_dominant_angle(small, cfg, quad_corners=small_quad)
         method = "staff_lines"
 
         if angle == 0.0:
-            angle = _projection_profile_angle(img, cfg)
+            angle = _projection_profile_angle(img, cfg, quad_corners=quad)
             method = "projection_profile"
 
         if abs(angle) > cfg.deskew_max_angle:
@@ -86,18 +89,29 @@ class DeskewStage(BaseStage):
 _DETECT_MAX_DIM = 1500
 
 
-def _downscale_for_detection(img: np.ndarray) -> np.ndarray:
+def _load_quad(metadata: dict) -> np.ndarray | None:
+    """Extract quad_corners from the incoming sidecar metadata."""
+    corners = metadata.get("quad_corners")
+    if corners is None:
+        return None
+    arr = np.array(corners, dtype=np.float32)
+    if arr.shape != (4, 2):
+        return None
+    return arr
+
+
+def _downscale_for_detection(img: np.ndarray) -> tuple[np.ndarray, float]:
     """Downscale image so its longest side is at most _DETECT_MAX_DIM.
 
-    Used to speed up staff-line detection (HoughLinesP) which does
-    not need full-resolution accuracy for angle estimation.
+    Returns ``(downscaled_image, scale_factor)`` so callers can rescale
+    coordinates (e.g. quad corners) by the same factor.
     """
     h, w = img.shape[:2]
     longest = max(h, w)
     if longest <= _DETECT_MAX_DIM:
-        return img
+        return img, 1.0
     scale = _DETECT_MAX_DIM / longest
-    return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA), scale
 
 
 def _rotate(
@@ -117,14 +131,24 @@ def _rotate(
     )
 
 
-def _projection_profile_angle(img: np.ndarray, cfg: Config) -> float:
+def _projection_profile_angle(
+    img: np.ndarray,
+    cfg: Config,
+    quad_corners: np.ndarray | None = None,
+) -> float:
     """Estimate skew angle via projection profile (coarse-to-fine).
 
     Used for text-only pages where no staff lines are detected.
     The image is binarized and downscaled to 25% for speed.
+
+    When *quad_corners* is provided, pixels outside the quad are zeroed
+    in the binary image before computing row-sum variance.
     """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    if quad_corners is not None:
+        binary = _apply_quad_mask(binary, quad_corners)
 
     scale = 0.25
     small = cv2.resize(binary, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)

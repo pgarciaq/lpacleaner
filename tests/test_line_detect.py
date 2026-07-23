@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 import pytest
 
-from tests.conftest import make_music_page, make_text_page
 from ghh.config import Config
 from ghh.utils.line_detect import (
     StaffLine,
@@ -16,6 +15,7 @@ from ghh.utils.line_detect import (
     detect_ink_mask_geometric,
     detect_staff_lines,
 )
+from tests.conftest import make_music_page, make_text_page
 
 
 @pytest.fixture
@@ -220,6 +220,40 @@ class TestDetectDominantAngle:
         text = make_text_page()
         angle = detect_dominant_angle(text, default_cfg)
         assert angle == 0.0, "No staff lines means angle should be 0"
+
+    def test_quad_none_works_same_as_no_quad(self, red_music_page, default_cfg):
+        angle_no_quad = detect_dominant_angle(red_music_page, default_cfg)
+        angle_none = detect_dominant_angle(red_music_page, default_cfg, quad_corners=None)
+        assert angle_no_quad == angle_none
+
+    def test_quad_mask_excludes_background_lines(self, default_cfg):
+        """Lines outside the quad should be ignored when quad is provided."""
+        h, w = 800, 600
+        img = np.full((h, w, 3), (230, 220, 200), dtype=np.uint8)
+
+        # Staff lines inside the quad region (center of image)
+        for y in range(200, 600, 30):
+            cv2.line(img, (100, y), (500, y), (0, 0, 200), 2)
+
+        # Spurious skewed lines in the corner (outside the quad)
+        for y in range(50, 150, 20):
+            cv2.line(img, (10, y), (200, y + 40), (0, 0, 200), 2)
+
+        quad = np.array([[80, 180], [520, 180], [520, 620], [80, 620]], dtype=np.float32)
+
+        angle_masked = detect_dominant_angle(img, default_cfg, quad_corners=quad)
+        assert abs(angle_masked) < 3.0, (
+            f"Masked detection should find near-horizontal lines, got {angle_masked}"
+        )
+
+    def test_full_image_quad_same_as_unmasked(self, red_music_page, default_cfg):
+        """A quad covering the full image should produce the same result."""
+        h, w = red_music_page.shape[:2]
+        quad = np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+
+        angle_unmasked = detect_dominant_angle(red_music_page, default_cfg)
+        angle_full_quad = detect_dominant_angle(red_music_page, default_cfg, quad_corners=quad)
+        assert abs(angle_unmasked - angle_full_quad) < 0.5
 
 
 # ---------------------------------------------------------------------------

@@ -184,11 +184,21 @@ def detect_staff_lines(img: np.ndarray, cfg: Config) -> list[StaffLine]:
     return staff_lines
 
 
-def detect_dominant_angle(img: np.ndarray, cfg: Config) -> float:
+def detect_dominant_angle(
+    img: np.ndarray,
+    cfg: Config,
+    quad_corners: np.ndarray | None = None,
+) -> float:
     """Median angle of detected staff lines in degrees.
+
+    When *quad_corners* (4x2 float32 array) is provided, pixels outside
+    the quad are zeroed before staff-line detection, preventing background
+    artifacts from corrupting the angle estimate.
 
     Returns 0.0 if no staff lines are found.
     """
+    if quad_corners is not None:
+        img = _apply_quad_mask(img, quad_corners)
     lines = detect_staff_lines(img, cfg)
     if not lines:
         return 0.0
@@ -242,6 +252,24 @@ def detect_illustration_regions(img: np.ndarray, cfg: Config) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _apply_quad_mask(img: np.ndarray, quad: np.ndarray) -> np.ndarray:
+    """Zero out pixels outside the quad region.
+
+    Works on both BGR and grayscale images. Returns a copy so the
+    original is not modified.
+    """
+    out = img.copy()
+    h, w = out.shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    pts = quad.astype(np.int32).reshape((-1, 1, 2))
+    cv2.fillConvexPoly(mask, pts, 255)
+    if out.ndim == 3:
+        out[mask == 0] = 0
+    else:
+        out[mask == 0] = 0
+    return out
+
 
 _CURVATURE_THRESHOLD = 1.5  # px RMS residual: below this, lower degree is sufficient
 

@@ -12,14 +12,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import pytest
 
 from ghh.config import Config
 from ghh.pipeline import BaseStage, PipelineState
 from ghh.stages.deskew import DeskewStage, _projection_profile_angle
-
-from tests.conftest import make_music_page
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -310,6 +306,57 @@ class TestDeskewStageRun:
         result2 = stage.run(input_dir, output_dir, cfg, state)
         assert result2.skipped == 1
         assert result2.processed == 0
+
+
+# ---------------------------------------------------------------------------
+# TestDeskewROIMask
+# ---------------------------------------------------------------------------
+
+class TestDeskewROIMask:
+    """Test that quad_corners from sidecar are used as an ROI mask (#76)."""
+
+    def test_uses_quad_from_metadata(self, tmp_path):
+        """When quad_corners is present, deskew should still produce a result."""
+        img = _make_skewed_image(1.5)
+        h, w = img.shape[:2]
+        quad = [[10, 10], [w - 10, 10], [w - 10, h - 10], [10, h - 10]]
+        metadata = {"quad_corners": quad}
+
+        cfg = _cfg(tmp_path)
+        result, meta = DeskewStage().process_image(img, metadata, cfg)
+        assert meta["stage"] == "deskew"
+        assert result.shape[0] > 0
+
+    def test_works_without_quad(self, tmp_path):
+        """Without quad_corners, deskew should work as before."""
+        img = _make_skewed_image(1.5)
+        cfg = _cfg(tmp_path)
+        result, meta = DeskewStage().process_image(img, {}, cfg)
+        assert meta["stage"] == "deskew"
+        assert result.shape[0] > 0
+
+    def test_quad_restricts_to_page_region(self, tmp_path):
+        """Background noise outside the quad should not affect angle detection."""
+        h, w = 800, 600
+        bg_color = (230, 225, 220)
+        img = np.full((h, w, 3), bg_color, dtype=np.uint8)
+
+        # Horizontal text lines in the center (page region)
+        for y in range(200, 600, 25):
+            cv2.line(img, (80, y), (520, y), (40, 40, 40), 2)
+
+        # Diagonal noise in the corners (outside the quad)
+        for y in range(20, 150, 15):
+            cv2.line(img, (10, y), (200, y + 60), (40, 40, 40), 3)
+
+        quad = [[60, 180], [540, 180], [540, 620], [60, 620]]
+        metadata = {"quad_corners": quad}
+
+        cfg = _cfg(tmp_path)
+        result, meta = DeskewStage().process_image(img, metadata, cfg)
+        assert abs(meta["skew_angle"]) < 2.0, (
+            f"With ROI mask, angle should be small but got {meta['skew_angle']}"
+        )
 
 
 # ---------------------------------------------------------------------------
