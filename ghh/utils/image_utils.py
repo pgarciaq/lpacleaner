@@ -48,7 +48,7 @@ def trim_to_content(
     bg_color: tuple[int, ...] | None = None,
     margin_frac: float = 0.0,
     threshold: int = 30,
-) -> np.ndarray:
+) -> tuple[np.ndarray, int, int]:
     """Trim background-colored borders and add uniform margin padding.
 
     1. Estimate bg_color if not provided.
@@ -57,8 +57,13 @@ def trim_to_content(
     4. Crop to that rect.
     5. Add uniform margin (margin_frac * width) filled with bg_color.
 
-    Returns the trimmed image.  If no content is found (entire image
-    is background), returns the original image unchanged.
+    Returns ``(trimmed_image, x_offset, y_offset)`` where offsets map
+    pixel (0, 0) in the returned image back to the original: a point
+    at ``(x, y)`` in the returned image corresponds to
+    ``(x + x_offset, y + y_offset)`` in the input.
+
+    If no content is found (entire image is background), returns the
+    original image unchanged with offsets ``(0, 0)``.
     """
     if bg_color is None:
         bg_color = estimate_background(img)
@@ -72,12 +77,15 @@ def trim_to_content(
     mask = diff > threshold
     coords = np.argwhere(mask)
     if coords.size == 0:
-        return img
+        return img, 0, 0
 
     y0, x0 = coords.min(axis=0)
     y1, x1 = coords.max(axis=0) + 1
 
     cropped = img[y0:y1, x0:x1]
+
+    if margin_frac <= 0:
+        return cropped, int(x0), int(y0)
 
     margin = max(1, int(cropped.shape[1] * margin_frac))
 
@@ -95,4 +103,4 @@ def trim_to_content(
         )
 
     padded[margin : margin + cropped.shape[0], margin : margin + cropped.shape[1]] = cropped
-    return padded
+    return padded, int(x0 - margin), int(y0 - margin)

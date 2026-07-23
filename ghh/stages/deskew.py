@@ -70,7 +70,7 @@ class DeskewStage(BaseStage):
             bg_color = estimate_background(img)
             result = _rotate(img, -angle, bg_color)
 
-        result = trim_to_content(result)
+        result, _trim_x, _trim_y = trim_to_content(result)
 
         meta = {
             "stage": "deskew",
