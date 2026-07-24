@@ -21,10 +21,8 @@ else:
 
 import cv2
 import numpy as np
-import pytest
 
-from tests.conftest import make_music_page, make_page_on_background, make_text_page
-
+from tests.conftest import make_music_page, make_page_on_background
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -253,6 +251,51 @@ class TestLayoutAnalysis:
         result = _analyze_layout(pages, _default_ink())
 
         assert "has_border_frame" in result
+
+    def test_detects_colored_border_frame(self, tmp_path):
+        """Border frames drawn in colored ink (red) are detected."""
+        from ghh.stages.analyze import _analyze_layout, _default_ink
+
+        pages = [make_music_page(
+            width=400, height=300,
+            staff_color=(0, 0, 200),
+        ) for _ in range(5)]
+
+        result = _analyze_layout(pages, _default_ink())
+        assert result["has_border_frame"] is True
+
+    def test_colored_border_frame_via_has_border_frame(self, tmp_path):
+        """Direct test of _has_border_frame with colored ink config."""
+        from ghh.config import Config
+        from ghh.stages.analyze import _has_border_frame
+
+        img = make_music_page(
+            width=400, height=300,
+            staff_color=(0, 0, 200),
+        )
+        cfg = Config(
+            input_dir=tmp_path,
+            staff_color_hue=5,
+            staff_color_range=15,
+            staff_saturation_min=40,
+            staff_value_min=80,
+        )
+        assert _has_border_frame(img, cfg) is True
+
+    def test_no_border_returns_false(self, tmp_path):
+        """Page without a border frame returns False."""
+        from ghh.config import Config
+        from ghh.stages.analyze import _has_border_frame
+
+        img = np.full((300, 400, 3), (230, 220, 200), dtype=np.uint8)
+        cfg = Config(
+            input_dir=tmp_path,
+            staff_color_hue=5,
+            staff_color_range=15,
+            staff_saturation_min=40,
+            staff_value_min=80,
+        )
+        assert _has_border_frame(img, cfg) is False
 
     def test_computes_aspect_ratio(self, tmp_path):
         from ghh.stages.analyze import _analyze_layout, _default_ink

@@ -251,7 +251,7 @@ def _analyze_layout(pages: list[np.ndarray], ink_result: dict) -> dict:
         lines = detect_staff_lines(page, cfg)
         staff_counts.append(len(lines))
 
-        border_votes.append(_has_border_frame(page))
+        border_votes.append(_has_border_frame(page, cfg))
 
     median_staff = robust_median([float(c) for c in staff_counts])
     median_aspect = robust_median(aspect_ratios)
@@ -267,26 +267,54 @@ def _analyze_layout(pages: list[np.ndarray], ink_result: dict) -> dict:
     }
 
 
-def _has_border_frame(page: np.ndarray) -> bool:
-    """Detect if a page has a rectangular border frame."""
-    gray = cv2.cvtColor(page, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
+def _has_border_frame(page: np.ndarray, cfg: Config) -> bool:
+    """Detect if a page has a rectangular border frame.
 
-    h, w = edges.shape
-    border_width = max(5, min(h, w) // 20)
+    Uses the color-aware ink mask so that colored (non-black) border
+    frames are detected correctly.  Falls back to grayscale Canny when
+    the ink mask is empty (e.g. black ink on white paper).
 
-    top = edges[:border_width, :].sum()
-    bottom = edges[-border_width:, :].sum()
-    left = edges[:, :border_width].sum()
-    right = edges[:, -border_width:].sum()
+    Checks whether at least 3 of the 4 edge strips contain a
+    continuous line of ink pixels (per-edge density threshold).
+    """
+    from ghh.utils.line_detect import detect_ink_mask
 
-    total_border = top + bottom + left + right
-    total_edges = edges.sum()
+    mask = detect_ink_mask(page, cfg)
 
-    if total_edges == 0:
+    if np.count_nonzero(mask) == 0:
+        gray = cv2.cvtColor(page, cv2.COLOR_BGR2GRAY) if page.ndim == 3 else page
+        mask = cv2.Canny(gray, 50, 150)
+
+    if np.count_nonzero(mask) == 0:
         return False
 
-    return (total_border / total_edges) > 0.15
+    h, w = mask.shape
+    # Border frames are typically drawn 5-15% inset from the page edge.
+    bh = max(5, int(h * 0.18))
+    bw = max(5, int(w * 0.18))
+
+    # For each edge strip, compute the fraction of its pixels that are ink.
+    # A border line running along an edge produces a measurable density.
+    min_density = 0.005
+    edges_with_line = 0
+
+    top_px = np.count_nonzero(mask[:bh, :])
+    if top_px / (bh * w) > min_density:
+        edges_with_line += 1
+
+    bottom_px = np.count_nonzero(mask[-bh:, :])
+    if bottom_px / (bh * w) > min_density:
+        edges_with_line += 1
+
+    left_px = np.count_nonzero(mask[:, :bw])
+    if left_px / (bw * h) > min_density:
+        edges_with_line += 1
+
+    right_px = np.count_nonzero(mask[:, -bw:])
+    if right_px / (bw * h) > min_density:
+        edges_with_line += 1
+
+    return edges_with_line >= 3
 
 
 # ---------------------------------------------------------------------------
